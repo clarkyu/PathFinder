@@ -35,8 +35,14 @@ npx serve .
 
 ## 部署
 
-任意静态托管均可（GitHub Pages、Vercel、Netlify、对象存储 + CDN…）。
-以 GitHub Pages 为例：仓库 **Settings → Pages → Source** 选择本分支根目录即可；HTTPS 环境下浏览器会自动提示"安装应用"。
+**GitHub Pages 自动部署已配置**：推送到 `main` 分支即触发 [`.github/workflows/deploy-pages.yml`](.github/workflows/deploy-pages.yml)，由 GitHub Actions 把仓库根目录发布到：
+
+> https://clarkyu.github.io/PathFinder/
+
+- 工作流首次运行会自动开启本仓库的 Pages（来源：GitHub Actions），无需手动设置；也可在 Actions 页手动触发（workflow_dispatch）。
+- 应用全部使用相对路径，天然兼容 `/PathFinder/` 子路径；HTTPS 环境下浏览器会自动提示"安装应用"。
+
+也可部署到任意其他静态托管（Vercel、Netlify、对象存储 + CDN…），直接上传仓库根目录即可。
 
 ## 目录结构
 
