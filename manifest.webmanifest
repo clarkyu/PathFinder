@@ -1,0 +1,33 @@
+{
+  "name": "航向 PathFinder · 升学与人生航向规划",
+  "short_name": "航向",
+  "description": "高中毕业生升学与人生航向规划系统：自我探索测评、奥德赛计划、生涯决策平衡单与冲稳保梯度，数据全部保存在本机，可离线使用。",
+  "lang": "zh-CN",
+  "dir": "ltr",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "theme_color": "#1450A3",
+  "background_color": "#F4F7FB",
+  "categories": ["education", "lifestyle", "productivity"],
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icons/maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    {
+      "name": "霍兰德兴趣测评",
+      "short_name": "测评",
+      "url": "./#/assess",
+      "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "决策平衡单",
+      "short_name": "决策",
+      "url": "./#/decide",
+      "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }]
+    }
+  ]
+}

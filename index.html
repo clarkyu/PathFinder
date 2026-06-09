@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>航向 PathFinder · 升学与人生航向规划</title>
+  <meta name="description" content="高中毕业生升学与人生航向规划系统：霍兰德兴趣测评、心流线索、奥德赛计划、生涯决策平衡单、冲稳保梯度与家长指南，把出分前后的两个月变成系统自我认识的窗口期。数据全部保存在本机。">
+  <meta name="theme-color" content="#1450A3">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="航向">
+  <link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+  <div id="app">
+    <header id="topbar" class="topbar"></header>
+    <main id="view" class="view" aria-live="polite"></main>
+    <nav id="tabbar" class="tabbar" aria-label="主导航"></nav>
+  </div>
+  <div id="modal-root"></div>
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+  <script src="js/data.js" defer></script>
+  <script src="js/store.js" defer></script>
+  <script src="js/app.js" defer></script>
+  <script>
+    if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) {
+      window.addEventListener('load', function () {
+        navigator.serviceWorker.register('sw.js').catch(function (e) {
+          console.warn('SW register failed:', e);
+        });
+      });
+    }
+  </script>
+</body>
+</html>
