@@ -89,7 +89,7 @@ svg { display: inline-block; vertical-align: -0.18em; width: 1.05em; height: 1.0
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
   border-top: 1px solid var(--line);
-  display: grid; grid-template-columns: repeat(3, 1fr);
+  display: grid; grid-template-columns: repeat(4, 1fr);
   max-width: 640px; margin: 0 auto;
   height: calc(var(--tabbar-h) + env(safe-area-inset-bottom));
   padding-bottom: env(safe-area-inset-bottom);
@@ -152,6 +152,27 @@ svg { display: inline-block; vertical-align: -0.18em; width: 1.05em; height: 1.0
 .tl-node.cur b, .tl-node.cur small { color: var(--ink); }
 .tl-node:active { background: var(--paper); }
 .tl-line { flex: none; width: 26px; height: 2px; background: #D8DCD2; margin-top: 8px; }
+.tl-hint { text-align: center; font-size: 11px; color: var(--muted); margin-top: 8px; }
+
+/* ---------------- 功能导航网格 ---------------- */
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.tile {
+  background: var(--card); border-radius: var(--radius); box-shadow: var(--shadow);
+  padding: 14px 14px 12px; color: var(--ink);
+  display: flex; flex-direction: column; gap: 2px;
+  transition: transform 0.1s;
+}
+.tile:active { transform: scale(0.98); }
+.tile-ic {
+  width: 36px; height: 36px; border-radius: 12px;
+  background: rgba(20, 80, 163, 0.08); color: var(--navy);
+  display: inline-flex; align-items: center; justify-content: center;
+  margin-bottom: 6px;
+}
+.tile-ic svg { width: 19px; height: 19px; }
+.tile b { font-size: 14.5px; }
+.tile small { font-size: 11.5px; color: var(--muted); }
+.tile-done .tile-ic { background: rgba(25, 167, 206, 0.12); color: var(--teal); }
 
 /* ---------------- 下一步 ---------------- */
 .next-hero { padding: 20px 18px; }
