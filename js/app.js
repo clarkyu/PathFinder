@@ -1,7 +1,7 @@
 /* ============================================================
  * 航向 PathFinder · 应用主逻辑（v2 · 领航员架构）
  * 设计逻辑见 docs/design.md：
- *   此刻（下一步推荐）· 罗盘（我是谁）· 航海图（去哪里）
+ *   此刻（下一步推荐）· 探索（我是谁）· 决策（去哪里）· 更多
  * ============================================================ */
 "use strict";
 
@@ -28,18 +28,30 @@
     toastTimer = setTimeout(function () { el.classList.remove("show"); }, 2000);
   }
   var saveTimer = null;
+  var saveWarned = false;
+  function doSave() {
+    if (!Store.save(S) && !saveWarned) {
+      saveWarned = true; // 每次会话只提醒一次，避免刷屏
+      toast("数据保存失败：可能处于无痕模式或存储已满，请尽快导出备份");
+    }
+  }
   function saveSoon() {
     clearTimeout(saveTimer);
-    saveTimer = setTimeout(function () { Store.save(S); }, 400);
+    saveTimer = setTimeout(doSave, 400);
   }
-  function saveNow() { clearTimeout(saveTimer); Store.save(S); }
+  function saveNow() { clearTimeout(saveTimer); doSave(); }
 
   /* ---------------- 状态 ---------------- */
   var S = Store.load();
   var deferredPrompt = null;
   var ob = { step: 0, persona: "student", phase: "before" }; // 开场定向的临时状态
+  var openAcc = {}; // 折叠面板展开状态（按 data-aid 记忆，跨重渲染保持）
 
   function isParent() { return S.profile.persona === "parent"; }
+  function accCls(aid, def) {
+    var open = Object.prototype.hasOwnProperty.call(openAcc, aid) ? openAcc[aid] : !!def;
+    return open ? " open" : "";
+  }
 
   /* ---------------- 图标（内联 SVG） ---------------- */
   function svg(paths) {
@@ -49,7 +61,6 @@
     sail: svg('<path d="M4 17.5h16l-1.6 3.5H5.6z"/><path d="M12 3v14.5"/><path d="M12 4l6.5 9.5H12z"/><path d="M12 7.5 7 13.5h5z"/>'),
     compass: svg('<circle cx="12" cy="12" r="9"/><path d="M15.5 8.5 13.4 13.4 8.5 15.5l2.1-4.9z"/>'),
     map: svg('<path d="M9 4 3 6.5v13L9 17l6 2.5 6-2.5v-13L15 6.5 9 4z"/><path d="M9 4v13"/><path d="M15 6.5v13"/>'),
-    gear: svg('<circle cx="12" cy="12" r="3.2"/><path d="M12 3v2.6"/><path d="M12 18.4V21"/><path d="M3 12h2.6"/><path d="M18.4 12H21"/><path d="M5.6 5.6l1.9 1.9"/><path d="M16.5 16.5l1.9 1.9"/><path d="M18.4 5.6l-1.9 1.9"/><path d="M7.5 16.5l-1.9 1.9"/>'),
     back: svg('<path d="M15 18l-6-6 6-6"/>'),
     chev: svg('<path d="M9 6l6 6-6 6"/>'),
     down: svg('<path d="M6 9l6 6 6-6"/>'),
@@ -86,6 +97,10 @@
       page = parts[0];
       sub = parts[1] || "";
     }
+    if (!{ now: 1, compass: 1, chart: 1, more: 1 }[page]) {
+      location.replace("#/now");
+      page = "now"; sub = "";
+    }
     return { page: page, sub: sub };
   }
 
@@ -120,7 +135,7 @@
     S.riasec.answers = {};
     S.riasec.idx = 0;
     saveNow();
-    toast("罗盘已校准！这是你的兴趣画像草稿");
+    toast("测评完成！这是你的兴趣画像草稿");
   }
 
   /* ---------------- 雷达图（纯 SVG） ---------------- */
@@ -135,11 +150,11 @@
       return order.map(function (_, i) { return pt(i, r).map(function (n) { return n.toFixed(1); }).join(","); }).join(" ");
     }
     var grid = [0.25, 0.5, 0.75, 1].map(function (k) {
-      return '<polygon points="' + poly(R * k) + '" fill="none" stroke="#DCE2D8" stroke-width="1"/>';
+      return '<polygon class="rd-grid" points="' + poly(R * k) + '"/>';
     }).join("");
     var axes = order.map(function (_, i) {
       var p = pt(i, R);
-      return '<line x1="' + cx + '" y1="' + cy + '" x2="' + p[0].toFixed(1) + '" y2="' + p[1].toFixed(1) + '" stroke="#E6EAE2" stroke-width="1"/>';
+      return '<line class="rd-axis" x1="' + cx + '" y1="' + cy + '" x2="' + p[0].toFixed(1) + '" y2="' + p[1].toFixed(1) + '"/>';
     }).join("");
     var labels = order.map(function (t, i) {
       var p = pt(i, R + 21);
@@ -154,7 +169,7 @@
     }).join("");
     return '<svg class="radar" viewBox="0 0 260 248" role="img" aria-label="霍兰德六型兴趣雷达图">' +
       grid + axes +
-      '<polygon points="' + dataPoly + '" fill="rgba(20,80,163,0.16)" stroke="#1450A3" stroke-width="2" stroke-linejoin="round"/>' +
+      '<polygon class="rd-data" points="' + dataPoly + '"/>' +
       dots + labels + "</svg>";
   }
 
@@ -189,10 +204,13 @@
     return '<div class="bar ' + (cls || "") + '"><i style="width:' + Math.max(0, Math.min(100, pct)) + '%"></i></div>';
   }
   function sliderRow(label, attrs, value, min, max, hint) {
+    var v = Number(value);
+    if (!isFinite(v)) v = min;
+    v = Math.min(max, Math.max(min, v));
     return '<div class="slider-row"><div class="slider-label">' + esc(label) +
       (hint ? "<small>" + esc(hint) + "</small>" : "") + "</div>" +
-      '<input type="range" min="' + min + '" max="' + max + '" step="1" value="' + value + '" ' + attrs + ">" +
-      "<output>" + value + "</output></div>";
+      '<input type="range" min="' + min + '" max="' + max + '" step="1" value="' + v + '" ' + attrs + ">" +
+      "<output>" + v + "</output></div>";
   }
 
   /* ---------------- 开场定向（首次启动三屏） ---------------- */
@@ -223,12 +241,12 @@
         '<p class="ob-intro">' + DATA.onboarding.welcome[ob.persona] + "</p>" +
         '<button class="btn btn-cta btn-block" data-act="ob-start">进入航程</button>';
     }
-    root.innerHTML = '<div class="ob"><div class="ob-card">' + inner + "</div></div>";
+    root.innerHTML = '<div class="ob" role="dialog" aria-modal="true" aria-label="开场定向"><div class="ob-card">' + inner + "</div></div>";
   }
 
   /* ---------------- 底部浮层（对话式输入） ---------------- */
   function sheetWrap(title, lead, inner) {
-    return '<div class="sheet-mask" data-act="sheet-close"><div class="sheet" data-act="noop">' +
+    return '<div class="sheet-mask" data-act="sheet-close"><div class="sheet" data-act="noop" role="dialog" aria-modal="true" aria-label="' + title + '">' +
       '<button class="sheet-x" data-act="sheet-close" aria-label="关闭">' + ICONS.close + "</button>" +
       '<div class="sheet-bar"></div><h3>' + title + "</h3>" +
       (lead ? '<p class="sheet-lead">' + lead + "</p>" : "") +
@@ -245,7 +263,7 @@
         '<input class="input" id="flow-when" maxlength="30" placeholder="大概什么时候？（选填）">' +
         '<p class="lbl">出现了哪些信号？</p><div class="sigs">' + sigs + "</div>" +
         '<textarea class="input" id="flow-note" rows="2" placeholder="补充细节（选填）"></textarea>' +
-        '<button class="btn btn-cta btn-block" data-act="flow-add">存进罗盘</button>');
+        '<button class="btn btn-cta btn-block" data-act="flow-add">保存这条线索</button>');
     },
     ach: function () {
       return sheetWrap("一件最有成就感的事",
@@ -253,7 +271,7 @@
         '<input class="input" id="ach-event" maxlength="60" placeholder="那件事，比如：带队拿了机器人比赛二等奖">' +
         '<input class="input" id="ach-role" maxlength="60" placeholder="具体做了什么？">' +
         '<input class="input" id="ach-pattern" maxlength="60" placeholder="最让人兴奋的点是什么？">' +
-        '<button class="btn btn-cta btn-block" data-act="ach-add">存进罗盘</button>');
+        '<button class="btn btn-cta btn-block" data-act="ach-add">保存这件事</button>');
     },
     iv: function () {
       var statusOpts = DATA.interview.statuses.map(function (s) {
@@ -280,13 +298,22 @@
         '<button class="btn btn-cta btn-block" data-act="cand-add">放进方向池</button>');
     }
   };
-  function openSheet(name) {
+  var sheetTrigger = null; // 打开浮层的按钮，关闭后焦点归还
+  function openSheet(name, trigger) {
     if (!SHEETS[name]) return;
+    sheetTrigger = trigger || null;
     $("#modal-root").innerHTML = SHEETS[name]();
+    document.body.classList.add("sheet-open");
+    var first = $("#modal-root .sheet .input");
+    if (first) setTimeout(function () { first.focus(); }, 60);
   }
   function closeSheet() {
     var root = $("#modal-root");
-    if (!root.getAttribute("data-ob")) root.innerHTML = "";
+    if (root.getAttribute("data-ob")) return;
+    root.innerHTML = "";
+    document.body.classList.remove("sheet-open");
+    if (sheetTrigger && document.contains(sheetTrigger)) sheetTrigger.focus();
+    sheetTrigger = null;
   }
 
   /* ---------------- 下一步推荐引擎 ---------------- */
@@ -322,7 +349,7 @@
         ? { tag: "方向", title: "帮他把方向捞进池子", body: "已有 " + cands + " 个。一起搜集 5–8 个方向的资料：学什么、就业去向、选科要求。", cta: "添加一个方向", sheet: "cand" }
         : { tag: "方向", title: "把模糊的兴趣捞进方向池", body: "已有 " + cands + " 个。把 5–8 个「隐约感兴趣」的专业 / 职业丢进来，先不用打分。", cta: "添加一个方向", sheet: "cand" });
       if (!ach) list.push({ tag: "线索", title: "写一件最有成就感的事", body: "具体做了什么？什么让人兴奋？反复出现的动机模式，指向天赋。", cta: "写一件", sheet: "ach" });
-      if (!list.length) list.push({ tag: "航程", title: "出分前的功课齐了", body: "等待也是航程的一部分。出分那天，点上方时间线进入下一段。", cta: "看看我的罗盘", to: "#/compass" });
+      if (!list.length) list.push({ tag: "航程", title: "出分前的功课齐了", body: "等待也是航程的一部分。出分那天，点上方时间线进入下一段。", cta: "看看我的探索画像", to: "#/compass" });
     } else if (S.profile.phase === "scored") {
       if (!hist) list.push(quizStep());
       if (cands < 3) list.push({ tag: "方向", title: "用位次补齐方向池", body: "已有 " + cands + " 个。出分了：以「位次」而非绝对分定位，把够得着的院校 + 专业放进来。", cta: "添加方向", sheet: "cand" });
@@ -351,7 +378,7 @@
 
   /* ---------------- 阶段时间线 ---------------- */
   function timeline() {
-    var idx = DATA.stages.findIndex(function (s) { return s.key === S.profile.phase; });
+    var idx = Math.max(0, DATA.stages.findIndex(function (s) { return s.key === S.profile.phase; }));
     return '<div class="tl">' + DATA.stages.map(function (s, i) {
       var cls = i < idx ? " past" : i === idx ? " cur" : "";
       return '<button class="tl-node' + cls + '" data-act="set-phase" data-v="' + s.key + '"><i></i><b>' + s.name + "</b><small>" + s.sub + "</small></button>";
@@ -360,7 +387,7 @@
   }
 
   /* ---------------- 视图：此刻 ---------------- */
-  function phaseChecklist(phase, open) {
+  function phaseChecklist(phase) {
     var done = phase.items.filter(function (it) { return S.checklist[it.id]; }).length;
     var rows = phase.items.map(function (it) {
       var checked = !!S.checklist[it.id];
@@ -390,7 +417,7 @@
 
     if (steps.length > 1) {
       html += '<p class="group-title">然后可以</p>' + steps.slice(1).map(function (st) {
-        var inner = '<div class="nm-main"><b>' + st.title + "</b><small>" + st.body + "</small></div>" + ICONS.chev;
+        var inner = '<span class="nm-main"><b>' + st.title + "</b><small>" + st.body + "</small></span>" + ICONS.chev;
         if (st.sheet) return '<button class="card next-mini" data-act="sheet-open" data-sheet="' + st.sheet + '">' + inner + "</button>";
         if (st.ext) return '<a class="card next-mini" href="' + st.ext + '" target="_blank" rel="noopener">' + inner + "</a>";
         return '<a class="card next-mini" href="' + st.to + '">' + inner + "</a>";
@@ -398,21 +425,22 @@
     }
 
     var phaseMap = { before: "p1", scored: "p2", after: "p3" };
-    var curId = phaseMap[S.profile.phase];
+    var curId = phaseMap[S.profile.phase] || "p1";
     var cur = null, others = [];
     DATA.phases.forEach(function (ph) { if (ph.id === curId) cur = ph; else others.push(ph); });
+    if (!cur) { cur = DATA.phases[0]; others = DATA.phases.slice(1); }
     var cl = phaseChecklist(cur);
     html += card('<div class="phase-head"><div><h3>本阶段清单</h3><p class="phase-meta">' + esc(cur.period) + " · " + esc(cur.goal) + "</p></div>" +
       '<span class="phase-count">' + cl.done + "/" + cl.total + "</span></div>" +
       progressBar(cl.done / cl.total * 100) +
       '<div class="checklist">' + cl.html + "</div>" +
-      '<div class="acc"><button class="acc-head" data-act="acc">其他阶段的清单 ' + ICONS.down + "</button>" +
+      '<div class="acc' + accCls("now-others") + '" data-aid="now-others"><button class="acc-head" data-act="acc">其他阶段的清单 ' + ICONS.down + "</button>" +
       '<div class="acc-body">' + others.map(function (ph) {
         var c = phaseChecklist(ph);
         return '<p class="lbl">' + esc(ph.name) + "（" + c.done + "/" + c.total + "）</p>" + '<div class="checklist">' + c.html + "</div>";
       }).join("") + "</div></div>");
 
-    html += card('<div class="acc"><button class="acc-head" data-act="acc">三个关键信号 · 何时调整策略 ' + ICONS.down + "</button>" +
+    html += card('<div class="acc' + accCls("now-th") + '" data-aid="now-th"><button class="acc-head" data-act="acc">三个关键信号 · 何时调整策略 ' + ICONS.down + "</button>" +
       '<div class="acc-body">' + DATA.thresholds.map(function (t) {
         return '<div class="th-row"><p class="th-when">' + esc(t.when) + '</p><p class="th-then">' + esc(t.then) + "</p></div>";
       }).join("") + "</div></div>");
@@ -431,14 +459,20 @@
     var hist = S.riasec.history;
     var quizStatus = (S.riasec.inProgress || answeredCount() > 0)
       ? "进行中 " + answeredCount() + "/" + DATA.riasec.questions.length
-      : hist.length ? hist[0].code + " · 已完成" : "未开始 · 约 6 分钟";
+      : hist.length ? esc(hist[0].code) + " · 已完成" : "未开始 · 约 6 分钟";
     var odN = ["a", "b", "c"].filter(function (k) { return S.odyssey[k].title && S.odyssey[k].title.trim(); }).length;
     var ivDone = S.interviews.filter(function (i) { return i.status === "done"; }).length;
+    var flowSt = (S.flows.length || S.achievements.length)
+      ? S.flows.length + " 条线索 · " + S.achievements.length + " 件成就"
+      : "未开始 · 天赋线索";
+    var ivSt = S.interviews.length
+      ? ivDone + "/" + S.interviews.length + " 场已完成"
+      : "未开始 · 建议 2–3 场";
     var tiles = [
       { to: "#/compass/quiz", icon: ICONS.target, name: "兴趣测评", st: quizStatus, done: !!hist.length },
-      { to: "#/compass/flow", icon: ICONS.star, name: "心流与成就", st: S.flows.length + " 条线索 · " + S.achievements.length + " 件成就", done: S.flows.length >= 3 },
-      { to: "#/compass/odyssey", icon: ICONS.route, name: "奥德赛计划", st: odN + "/3 个版本已写", done: odN === 3 },
-      { to: "#/compass/interview", icon: ICONS.chat, name: "人物访谈", st: ivDone + "/" + S.interviews.length + " 场已完成", done: ivDone >= 2 }
+      { to: "#/compass/flow", icon: ICONS.star, name: "心流与成就", st: flowSt, done: S.flows.length >= 3 },
+      { to: "#/compass/odyssey", icon: ICONS.route, name: "奥德赛计划", st: odN ? odN + "/3 个版本已写" : "未开始 · 三种五年", done: odN === 3 },
+      { to: "#/compass/interview", icon: ICONS.chat, name: "人物访谈", st: ivSt, done: ivDone >= 2 }
     ];
     return '<div class="grid2">' + tiles.map(function (t) {
       return '<a class="tile' + (t.done ? " tile-done" : "") + '" href="' + t.to + '">' +
@@ -490,7 +524,7 @@
       '<button class="btn btn-ghost" data-act="sheet-open" data-sheet="ach">' + ICONS.plus + ' 写成就</button>' +
       '<button class="btn btn-ghost" data-act="sheet-open" data-sheet="iv">' + ICONS.plus + ' 加访谈</button></div>');
 
-    html += '<a class="card next-mini" href="#/compass/quiz"><div class="nm-main"><b>更多权威免费测评</b><small>VIA 性格优势 · 阳光志愿四维 · 学职平台 · 大五人格</small></div>' + ICONS.chev + "</a>";
+    html += '<a class="card next-mini" href="#/compass/quiz"><span class="nm-main"><b>更多权威免费测评</b><small>VIA 性格优势 · 阳光志愿四维 · 学职平台 · 大五人格</small></span>' + ICONS.chev + "</a>";
     return html;
   }
 
@@ -503,7 +537,7 @@
       return '<div class="tool">' + head + body + link + "</div>";
     }).join("");
     return card("<h3>更多权威免费测评</h3>" + cards +
-      '<div class="acc"><button class="acc-head" data-act="acc">测评的科学性怎么看 ' + ICONS.down + "</button>" +
+      '<div class="acc' + accCls("tools-sci") + '" data-aid="tools-sci"><button class="acc-head" data-act="acc">测评的科学性怎么看 ' + ICONS.down + "</button>" +
       '<div class="acc-body"><p>' + esc(DATA.toolsNote) + "</p></div></div>");
   }
 
@@ -571,7 +605,7 @@
       }).join("");
       var histList = r.history.length > 1
         ? '<p class="lbl">历史记录</p>' + r.history.slice(1).map(function (x) {
-            return '<p class="hist-row">' + fmtDate(x.date) + " · " + x.code + "</p>";
+            return '<p class="hist-row">' + fmtDate(x.date) + " · " + esc(x.code) + "</p>";
           }).join("")
         : "";
       html += card('<div class="result-head"><p class="lbl">我的霍兰德代码 · ' + fmtDate(h.date) + "</p>" +
@@ -581,7 +615,7 @@
         '<div class="tbars">' + bars + "</div>" +
         '<p class="note">' + esc(DATA.riasec.note) + "</p>", "result-card");
       html += card("<h3>前三型解读</h3>" + typeCards +
-        '<div class="btn-row"><a class="btn btn-cta" href="#/chart">把感兴趣的方向加进航海图</a>' +
+        '<div class="btn-row"><a class="btn btn-cta" href="#/chart">把感兴趣的方向加进决策</a>' +
         '<button class="btn btn-ghost" data-act="riasec-retake">重新测评</button></div>' + histList);
     } else {
       html += card("<h3>霍兰德兴趣探索</h3><p>" + esc(DATA.riasec.intro) + "</p>" +
@@ -606,7 +640,8 @@
 
     if (S.flows.length) {
       html += S.flows.map(function (f) {
-        var chips = (f.signals || []).map(function (i) { return '<span class="chip chip-soft">' + DATA.flowSignals[i] + "</span>"; }).join("");
+        var chips = (f.signals || []).filter(function (i) { return DATA.flowSignals[i] !== undefined; })
+          .map(function (i) { return '<span class="chip chip-soft">' + DATA.flowSignals[i] + "</span>"; }).join("");
         return card('<div class="item-head"><b>' + esc(f.activity) + "</b>" +
           '<button class="icon-btn" data-act="flow-del" data-id="' + f.id + '" aria-label="删除">' + ICONS.trash + "</button></div>" +
           (f.when ? '<p class="item-meta">' + esc(f.when) + "</p>" : "") +
@@ -665,7 +700,7 @@
           return '<p class="lbl">' + q + "</p>" +
             '<textarea class="input" rows="2" data-iid="' + iv.id + '" data-q="' + qi + '" placeholder="对方的回答…">' + esc(iv.answers[qi] || "") + "</textarea>";
         }).join("");
-        return '<section class="card item-card acc">' +
+        return '<section class="card item-card acc' + accCls("iv-" + iv.id) + '" data-aid="iv-' + iv.id + '">' +
           '<div class="item-head">' +
           '<button class="acc-head iv-head" data-act="acc"><b>' + esc(iv.person) + "</b>" +
           (iv.occupation ? '<span class="item-meta">' + esc(iv.occupation) + "</span>" : "") + " " + ICONS.down + "</button>" +
@@ -705,7 +740,7 @@
     var wRows = DATA.decision.dims.map(function (d) {
       return sliderRow(d.name, 'data-w="' + d.key + '"', S.decision.weights[d.key], 1, 5, d.hint);
     }).join("");
-    html += card('<div class="acc"><button class="acc-head" data-act="acc">你看重什么 · 维度权重（1–5） ' + ICONS.down + "</button>" +
+    html += card('<div class="acc' + accCls("weights") + '" data-aid="weights"><button class="acc-head" data-act="acc">你看重什么 · 维度权重（1–5） ' + ICONS.down + "</button>" +
       '<div class="acc-body">' + wRows + "</div></div>");
 
     if (cands.length >= 2) {
@@ -751,7 +786,7 @@
         var t = tierInfo(g);
         var n = S.decision.candidates.filter(function (c) { return c.tier === g; }).length;
         return '<span class="tier-pill" style="background:' + t.color + '">' + t.name + " " + n + "</span>";
-      }).join("") + (unset.length ? '<span class="tier-pill" style="background:#9AA8B5">未定 ' + unset.length + "</span>" : "") + "</div>" +
+      }).join("") + (unset.length ? '<span class="tier-pill" style="background:' + tierInfo("unset").color + '">未定 ' + unset.length + "</span>" : "") + "</div>" +
       '<p class="note">在「方向池」的方案卡片里点 冲 / 稳 / 保 即可归档。</p>');
 
     groups.forEach(function (g) {
@@ -779,11 +814,10 @@
 
     var items = [
       { to: "#/more/parents", name: "家长专区", desc: "自主支持，而非包办" },
-      { to: "#/more/knowledge", name: "知识库", desc: "20+ 个理论卡片，按需取用" },
+      { to: "#/more/knowledge", name: "知识库", desc: "22 张理论卡片，按需取用" },
       { to: "#/more/data", name: "数据管理", desc: "导出 / 导入 / 清空本机数据" },
       { to: "#/more/about", name: "关于与声明", desc: "版本 · 依据 · 局限" }
     ];
-    if (isParent()) items.unshift(items.splice(0, 1)[0]); // 家长身份时家长专区已在首位
 
     var html = "";
     if (deferredPrompt) {
@@ -817,7 +851,7 @@
       return '<blockquote class="quote quote-card">“' + esc(s.text) + '”<cite>' + esc(s.by) + "</cite></blockquote>";
     }).join("");
     html += card("<h3>四个提醒</h3>" + p.warnings.map(function (w, i) {
-      return '<div class="acc' + (i === 0 ? " open" : "") + '"><button class="acc-head" data-act="acc">' + esc(w.title) + " " + ICONS.down + "</button>" +
+      return '<div class="acc' + accCls("pw-" + i, i === 0) + '" data-aid="pw-' + i + '"><button class="acc-head" data-act="acc">' + esc(w.title) + " " + ICONS.down + "</button>" +
         '<div class="acc-body"><p>' + esc(w.desc) + "</p></div></div>";
     }).join(""));
     html += card("<h3>日常观察法</h3><p>" + esc(p.observe) + "</p>" +
@@ -859,32 +893,32 @@
 
   /* ---------------- 顶栏 / 标签栏 / 渲染 ---------------- */
   var TITLES = { compass: "探索 · 我是谁", chart: "决策 · 去哪里", more: "更多" };
-  var SUB_TITLES = {
-    quiz: "兴趣测评", flow: "心流与成就", odyssey: "奥德赛计划", interview: "人物访谈",
-    parents: "家长专区", knowledge: "知识库", data: "数据管理", about: "关于与声明"
-  };
+  var COMPASS_SUBS = { quiz: "兴趣测评", flow: "心流与成就", odyssey: "奥德赛计划", interview: "人物访谈" };
+  var MORE_SUBS = { parents: "家长专区", knowledge: "知识库", data: "数据管理", about: "关于与声明" };
 
   function renderTopbar(r) {
     var el = $("#topbar");
     if (r.page === "now") {
-      el.innerHTML = '<div class="topbar-in"><span class="brand">' + DATA.app.name + '</span><span class="brand-sub">' + DATA.app.title + "</span></div>";
+      el.innerHTML = '<div class="topbar-in"><h1 class="brand">' + DATA.app.name + '</h1><span class="brand-sub">' + DATA.app.title + "</span></div>";
       return;
     }
     var title = TITLES[r.page] || "";
     var back = "";
-    if (r.page === "compass" && r.sub && SUB_TITLES[r.sub]) {
-      title = SUB_TITLES[r.sub];
+    if (r.page === "compass" && COMPASS_SUBS[r.sub]) {
+      title = COMPASS_SUBS[r.sub];
       back = '<a class="back-btn" href="#/compass" aria-label="返回探索">' + ICONS.back + "</a>";
-    } else if (r.page === "more" && r.sub && SUB_TITLES[r.sub]) {
-      title = SUB_TITLES[r.sub];
+    } else if (r.page === "more" && MORE_SUBS[r.sub]) {
+      title = MORE_SUBS[r.sub];
       back = '<a class="back-btn" href="#/more" aria-label="返回更多">' + ICONS.back + "</a>";
     }
-    el.innerHTML = '<div class="topbar-in">' + back + '<span class="page-title">' + title + "</span></div>";
+    el.innerHTML = '<div class="topbar-in">' + back + '<h1 class="page-title">' + title + "</h1></div>";
   }
 
   function renderTabbar(r) {
     $("#tabbar").innerHTML = NAV.map(function (n) {
-      return '<a class="tab' + (n.id === r.page ? " active" : "") + '" href="#/' + n.id + '">' + n.icon + "<span>" + n.name + "</span></a>";
+      var active = n.id === r.page;
+      return '<a class="tab' + (active ? " active" : "") + '" href="#/' + n.id + '"' +
+        (active ? ' aria-current="page"' : "") + ">" + n.icon + "<span>" + n.name + "</span></a>";
     }).join("");
   }
 
@@ -894,26 +928,54 @@
     renderTopbar(r);
     renderTabbar(r);
     var v = $("#view");
-    if (r.page === "compass") {
-      if (r.sub === "quiz") v.innerHTML = viewQuiz();
-      else if (r.sub === "flow") v.innerHTML = viewFlowPage();
-      else if (r.sub === "odyssey") v.innerHTML = viewOdysseyPage();
-      else if (r.sub === "interview") v.innerHTML = viewInterviewPage();
-      else v.innerHTML = viewCompass();
+    try {
+      if (r.page === "compass") {
+        if (r.sub === "quiz") v.innerHTML = viewQuiz();
+        else if (r.sub === "flow") v.innerHTML = viewFlowPage();
+        else if (r.sub === "odyssey") v.innerHTML = viewOdysseyPage();
+        else if (r.sub === "interview") v.innerHTML = viewInterviewPage();
+        else v.innerHTML = viewCompass();
+      }
+      else if (r.page === "chart") v.innerHTML = viewChart(r.sub);
+      else if (r.page === "more") v.innerHTML = viewMore(r.sub);
+      else v.innerHTML = viewNow();
+    } catch (err) {
+      // 渲染兜底：本地数据异常时给用户自救通道，而不是白屏
+      console.error("render failed:", err);
+      v.innerHTML = card("<h3>页面渲染出错</h3><p>本地数据可能已损坏。建议先导出备份，再清空数据恢复。</p>" +
+        '<a class="btn btn-block" href="#/more/data">前往数据管理</a>' +
+        '<p class="note">' + esc(String(err && err.message || err)) + "</p>");
     }
-    else if (r.page === "chart") v.innerHTML = viewChart(r.sub);
-    else if (r.page === "more") v.innerHTML = viewMore(r.sub);
-    else v.innerHTML = viewNow();
+    // 折叠面板的可访问性状态（aria-expanded）
+    $all(".acc", v).forEach(function (a) {
+      var h = a.querySelector(".acc-head");
+      if (h) h.setAttribute("aria-expanded", a.classList.contains("open") ? "true" : "false");
+    });
     renderOnboarding();
     if (location.hash !== lastHash) {
+      closeSheet();                      // 路由切换时收起浮层（含浏览器返回键）
+      v.classList.remove("no-anim");     // 只有路由级导航播放入场动画
       window.scrollTo(0, 0);
       lastHash = location.hash;
     }
   }
   function rerenderKeep() {
     var y = window.scrollY;
+    // 记住当前焦点控件（滑块按方向键时 change 会触发重渲染，焦点必须找回来）
+    var ae = document.activeElement, sel = null;
+    if (ae && ae.dataset) {
+      if (ae.dataset.w) sel = '[data-w="' + ae.dataset.w + '"]';
+      else if (ae.dataset.cid && ae.dataset.dim) sel = '[data-cid="' + ae.dataset.cid + '"][data-dim="' + ae.dataset.dim + '"]';
+      else if (ae.dataset.od && ae.dataset.gauge) sel = '[data-od="' + ae.dataset.od + '"][data-gauge="' + ae.dataset.gauge + '"]';
+      else if (ae.dataset.check) sel = '[data-check="' + ae.dataset.check + '"]';
+    }
+    $("#view").classList.add("no-anim"); // 原地刷新不重播入场动画
     render();
     window.scrollTo(0, y);
+    if (sel) {
+      var el = $(sel);
+      if (el) el.focus({ preventScroll: true });
+    }
   }
 
   /* ---------------- 事件：点击 ---------------- */
@@ -926,7 +988,12 @@
 
     if (act === "acc") {
       var acc = btn.closest(".acc");
-      if (acc) acc.classList.toggle("open");
+      if (acc) {
+        var nowOpen = acc.classList.toggle("open");
+        var aid = acc.getAttribute("data-aid");
+        if (aid) openAcc[aid] = nowOpen;
+        btn.setAttribute("aria-expanded", nowOpen ? "true" : "false");
+      }
       return;
     }
 
@@ -970,11 +1037,13 @@
     }
 
     /* ---- 浮层 ---- */
-    if (act === "sheet-open") { openSheet(btn.dataset.sheet); return; }
+    if (act === "sheet-open") { openSheet(btn.dataset.sheet, btn); return; }
     if (act === "sheet-close") { closeSheet(); return; }
 
     /* ---- 测评 ---- */
     if (act === "riasec-start" || act === "riasec-retake") {
+      if (answeredCount() > 0 &&
+          !confirm("重新开始会清空当前已作答的 " + answeredCount() + " 题，确定吗？")) return;
       S.riasec.answers = {};
       S.riasec.idx = 0;
       S.riasec.inProgress = true;
@@ -1000,6 +1069,7 @@
     }
     if (act === "riasec-prev") {
       S.riasec.idx = Math.max(0, S.riasec.idx - 1);
+      saveSoon();
       render();
       return;
     }
@@ -1022,7 +1092,7 @@
         note: $("#flow-note").value.trim(),
         created: Date.now()
       });
-      saveNow(); closeSheet(); rerenderKeep(); toast("已存进罗盘");
+      saveNow(); closeSheet(); rerenderKeep(); toast("已保存到「探索」");
       return;
     }
     if (act === "flow-del") {
@@ -1040,7 +1110,7 @@
         pattern: $("#ach-pattern").value.trim(),
         created: Date.now()
       });
-      saveNow(); closeSheet(); rerenderKeep(); toast("已存进罗盘");
+      saveNow(); closeSheet(); rerenderKeep(); toast("已保存到「探索」");
       return;
     }
     if (act === "ach-del") {
@@ -1068,6 +1138,7 @@
     if (act === "iv-del") {
       if (!confirm("删除这条访谈记录？")) return;
       S.interviews = S.interviews.filter(function (x) { return x.id !== btn.dataset.id; });
+      delete openAcc["iv-" + btn.dataset.id];
       saveNow(); rerenderKeep();
       return;
     }
@@ -1154,6 +1225,7 @@
     }
 
     if (t.id === "import-file" && t.files && t.files[0]) {
+      if (!confirm("导入将覆盖当前全部数据，确定继续？")) { t.value = ""; return; }
       var reader = new FileReader();
       reader.onload = function () {
         try {
@@ -1230,6 +1302,21 @@
     }
   });
 
+  /* ---------------- 事件：键盘（Esc 关闭浮层 + Tab 焦点圈定） ---------------- */
+  document.addEventListener("keydown", function (e) {
+    var sheet = $("#modal-root .sheet");
+    if (!sheet) return;
+    if (e.key === "Escape") { closeSheet(); return; }
+    if (e.key === "Tab") {
+      var f = $all("button, [href], input, select, textarea", sheet).filter(function (el) { return !el.disabled; });
+      if (!f.length) return;
+      var first = f[0], last = f[f.length - 1];
+      if (!sheet.contains(document.activeElement)) { e.preventDefault(); first.focus(); return; }
+      if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+      else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+    }
+  });
+
   /* ---------------- PWA 安装提示 ---------------- */
   window.addEventListener("beforeinstallprompt", function (e) {
     e.preventDefault();
@@ -1240,6 +1327,14 @@
     deferredPrompt = null;
     toast("已安装到主屏幕");
     if (route().page === "more") rerenderKeep();
+  });
+
+  /* ---------------- 多标签页同步 ---------------- */
+  window.addEventListener("storage", function (e) {
+    if (e.key === "pathfinder.v1") {
+      S = Store.load();
+      rerenderKeep();
+    }
   });
 
   /* ---------------- 启动 ---------------- */

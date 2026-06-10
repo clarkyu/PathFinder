@@ -5,7 +5,13 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>航向 PathFinder · 升学与人生航向规划</title>
   <meta name="description" content="高中毕业生升学与人生航向规划系统：霍兰德兴趣测评、心流线索、奥德赛计划、生涯决策平衡单、冲稳保梯度与家长指南，把出分前后的两个月变成系统自我认识的窗口期。数据全部保存在本机。">
-  <meta name="theme-color" content="#1450A3">
+  <meta property="og:title" content="航向 PathFinder · 升学与人生航向规划">
+  <meta property="og:description" content="出分前认识自己，出分后科学决策：兴趣测评、心流线索、奥德赛计划、决策平衡单与冲稳保梯度，数据全部保存在本机。">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://clarkyu.github.io/PathFinder/">
+  <meta property="og:image" content="https://clarkyu.github.io/PathFinder/icons/icon-512.png">
+  <meta name="theme-color" media="(prefers-color-scheme: light)" content="#1450A3">
+  <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#10171F">
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
@@ -16,9 +22,14 @@
   <link rel="stylesheet" href="css/app.css">
 </head>
 <body>
+  <noscript>
+    <p style="max-width:480px;margin:80px auto;padding:0 24px;text-align:center;font-family:sans-serif;color:#17293E">
+      本应用需要启用 JavaScript 才能运行。请在浏览器设置中允许 JavaScript 后刷新页面。
+    </p>
+  </noscript>
   <div id="app">
     <header id="topbar" class="topbar"></header>
-    <main id="view" class="view" aria-live="polite"></main>
+    <main id="view" class="view"></main>
     <nav id="tabbar" class="tabbar" aria-label="主导航"></nav>
   </div>
   <div id="modal-root"></div>

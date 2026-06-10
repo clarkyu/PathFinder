@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>航向 PathFinder</title>
+  <script>
+    // GitHub Pages 404 兜底：本应用是哈希路由的单页应用，任何路径都应回到应用根。
+    // 项目站点（/PathFinder/...）回到 /PathFinder/；其他部署形态回到根目录。
+    // 保留 location.hash，深链（如 #/compass/quiz）不丢失。
+    (function () {
+      var REPO = "PathFinder";
+      var first = location.pathname.split("/").filter(Boolean)[0];
+      var root = first === REPO ? "/" + REPO + "/" : "/";
+      location.replace(root + location.hash);
+    })();
+  </script>
+</head>
+<body>
+  <p style="max-width:480px;margin:80px auto;padding:0 24px;text-align:center;font-family:sans-serif;color:#17293E">
+    页面不存在，正在返回应用… <a href="./">点此进入</a>
+  </p>
+</body>
+</html>

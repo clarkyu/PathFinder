@@ -21,9 +21,11 @@
 
 ## 技术特性
 
-- **PWA**：Service Worker 应用壳缓存，完全离线可用；可"添加到主屏幕"像原生 App 一样使用（含 maskable 图标、快捷方式）。
+- **PWA**：Service Worker 离线可用（导航网络优先 + 4 秒弱网超时回退；静态资源 stale-while-revalidate，部署后自动更新）；可"添加到主屏幕"（含 maskable 图标、快捷方式）；防强制门户缓存污染。
 - **零依赖、零构建**：原生 HTML/CSS/JS，无框架、无打包器、无 npm 依赖，任何静态服务器可直接部署。
-- **数据完全本地**：所有记录仅存于浏览器 `localStorage`，无服务器、不收集任何信息；支持 JSON 一键备份与恢复。
+- **数据完全本地**：所有记录仅存于浏览器 `localStorage`，无服务器、不收集任何信息；JSON 一键备份与恢复，导入数据经过白名单消毒（防注入、防损坏数据导致崩溃）。
+- **深色模式**：跟随系统 `prefers-color-scheme`，全套设计令牌双主题。
+- **可访问性**：dialog 语义浮层（Esc / 焦点圈定 / 焦点归还）、`aria-expanded` 折叠面板、`:focus-visible` 焦点环、`prefers-reduced-motion` 降级。
 - **移动优先**：针对手机竖屏设计，桌面端自适应居中（640px）。
 
 ## 本地运行
