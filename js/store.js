@@ -20,6 +20,11 @@ var Store = (function () {
     return {
       version: 1,
       createdAt: Date.now(),
+      profile: {
+        persona: "student",          // student | parent
+        phase: "before",             // before | scored | after
+        onboarded: false
+      },
       checklist: {},                 // { itemId: true }
       riasec: {
         answers: {},                 // { questionIndex: 0|1|2 }

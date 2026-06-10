@@ -1,6 +1,7 @@
 /* ============================================================
- * 航向 PathFinder · 应用主逻辑
- * 零依赖原生 JS：哈希路由 + 视图渲染 + 事件委托
+ * 航向 PathFinder · 应用主逻辑（v2 · 领航员架构）
+ * 设计逻辑见 docs/design.md：
+ *   此刻（下一步推荐）· 罗盘（我是谁）· 航海图（去哪里）
  * ============================================================ */
 "use strict";
 
@@ -36,39 +37,50 @@
   /* ---------------- 状态 ---------------- */
   var S = Store.load();
   var deferredPrompt = null;
+  var ob = { step: 0, persona: "student", phase: "before" }; // 开场定向的临时状态
+
+  function isParent() { return S.profile.persona === "parent"; }
 
   /* ---------------- 图标（内联 SVG） ---------------- */
-  function svg(paths, extra) {
-    return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"' +
-      (extra || "") + ">" + paths + "</svg>";
+  function svg(paths) {
+    return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + paths + "</svg>";
   }
   var ICONS = {
-    home: svg('<path d="M3 11.2 12 4l9 7.2"/><path d="M5.5 9.8V20h13V9.8"/>'),
-    assess: svg('<circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="4"/><circle cx="12" cy="12" r="0.6" fill="currentColor"/>'),
-    explore: svg('<circle cx="12" cy="12" r="9"/><path d="M15.5 8.5 13.4 13.4 8.5 15.5l2.1-4.9z"/>'),
-    decide: svg('<path d="M12 3v18"/><path d="M8 21h8"/><path d="M4 7h16"/><path d="M6.5 7 4 12.5a2.6 2.6 0 0 0 5 0L6.5 7z"/><path d="M17.5 7 15 12.5a2.6 2.6 0 0 0 5 0L17.5 7z"/>'),
-    more: svg('<circle cx="5" cy="12" r="1.6" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.6" fill="currentColor" stroke="none"/><circle cx="19" cy="12" r="1.6" fill="currentColor" stroke="none"/>'),
+    sail: svg('<path d="M4 17.5h16l-1.6 3.5H5.6z"/><path d="M12 3v14.5"/><path d="M12 4l6.5 9.5H12z"/><path d="M12 7.5 7 13.5h5z"/>'),
+    compass: svg('<circle cx="12" cy="12" r="9"/><path d="M15.5 8.5 13.4 13.4 8.5 15.5l2.1-4.9z"/>'),
+    map: svg('<path d="M9 4 3 6.5v13L9 17l6 2.5 6-2.5v-13L15 6.5 9 4z"/><path d="M9 4v13"/><path d="M15 6.5v13"/>'),
+    gear: svg('<circle cx="12" cy="12" r="3.2"/><path d="M12 3v2.6"/><path d="M12 18.4V21"/><path d="M3 12h2.6"/><path d="M18.4 12H21"/><path d="M5.6 5.6l1.9 1.9"/><path d="M16.5 16.5l1.9 1.9"/><path d="M18.4 5.6l-1.9 1.9"/><path d="M7.5 16.5l-1.9 1.9"/>'),
     back: svg('<path d="M15 18l-6-6 6-6"/>'),
     chev: svg('<path d="M9 6l6 6-6 6"/>'),
     down: svg('<path d="M6 9l6 6 6-6"/>'),
     plus: svg('<path d="M12 5v14"/><path d="M5 12h14"/>'),
     trash: svg('<path d="M4 7h16"/><path d="M9 7V5h6v2"/><path d="M6.5 7l1 13h9l1-13"/><path d="M10 11v6"/><path d="M14 11v6"/>'),
-    ext: svg('<path d="M14 5h5v5"/><path d="M19 5l-8 8"/><path d="M19 14v5H5V5h5"/>')
+    ext: svg('<path d="M14 5h5v5"/><path d="M19 5l-8 8"/><path d="M19 14v5H5V5h5"/>'),
+    close: svg('<path d="M6 6l12 12"/><path d="M18 6 6 18"/>')
   };
 
   var NAV = [
-    { id: "home", name: "首页", icon: ICONS.home },
-    { id: "assess", name: "测评", icon: ICONS.assess },
-    { id: "explore", name: "探索", icon: ICONS.explore },
-    { id: "decide", name: "决策", icon: ICONS.decide },
-    { id: "more", name: "更多", icon: ICONS.more }
+    { id: "now", name: "此刻", icon: ICONS.sail },
+    { id: "compass", name: "罗盘", icon: ICONS.compass },
+    { id: "chart", name: "航海图", icon: ICONS.map }
   ];
 
-  /* ---------------- 路由 ---------------- */
+  /* ---------------- 路由（含旧链接重定向） ---------------- */
   function route() {
-    var h = (location.hash || "#/home").replace(/^#\/?/, "");
+    var h = (location.hash || "#/now").replace(/^#\/?/, "");
     var parts = h.split("/");
-    return { page: parts[0] || "home", sub: parts[1] || "" };
+    var page = parts[0] || "now", sub = parts[1] || "";
+    var legacy = { home: "now", assess: "compass/quiz", explore: "compass", decide: "chart" };
+    if (legacy[page] !== undefined) {
+      var to = legacy[page];
+      if (page === "explore" && sub) to = "compass/" + sub;
+      if (page === "decide" && sub === "tier") to = "chart/tier";
+      location.replace("#/" + to);
+      parts = to.split("/");
+      page = parts[0];
+      sub = parts[1] || "";
+    }
+    return { page: page, sub: sub };
   }
 
   /* ---------------- RIASEC 计算 ---------------- */
@@ -102,7 +114,7 @@
     S.riasec.answers = {};
     S.riasec.idx = 0;
     saveNow();
-    toast("测评完成！这是你的兴趣画像草稿");
+    toast("罗盘已校准！这是你的兴趣画像草稿");
   }
 
   /* ---------------- 雷达图（纯 SVG） ---------------- */
@@ -117,11 +129,11 @@
       return order.map(function (_, i) { return pt(i, r).map(function (n) { return n.toFixed(1); }).join(","); }).join(" ");
     }
     var grid = [0.25, 0.5, 0.75, 1].map(function (k) {
-      return '<polygon points="' + poly(R * k) + '" fill="none" stroke="#D7DFEA" stroke-width="1"/>';
+      return '<polygon points="' + poly(R * k) + '" fill="none" stroke="#DCE2D8" stroke-width="1"/>';
     }).join("");
     var axes = order.map(function (_, i) {
       var p = pt(i, R);
-      return '<line x1="' + cx + '" y1="' + cy + '" x2="' + p[0].toFixed(1) + '" y2="' + p[1].toFixed(1) + '" stroke="#E3E9F2" stroke-width="1"/>';
+      return '<line x1="' + cx + '" y1="' + cy + '" x2="' + p[0].toFixed(1) + '" y2="' + p[1].toFixed(1) + '" stroke="#E6EAE2" stroke-width="1"/>';
     }).join("");
     var labels = order.map(function (t, i) {
       var p = pt(i, R + 21);
@@ -129,17 +141,14 @@
       return '<text x="' + p[0].toFixed(1) + '" y="' + p[1].toFixed(1) + '" text-anchor="middle" dominant-baseline="middle" font-size="11" font-weight="600" fill="' + info.color + '">' +
         t + " " + info.name + "</text>";
     }).join("");
-    var dataPts = order.map(function (t, i) {
-      var r = (scores[t] / max) * R;
-      return pt(i, r);
-    });
+    var dataPts = order.map(function (t, i) { return pt(i, (scores[t] / max) * R); });
     var dataPoly = dataPts.map(function (p) { return p.map(function (n) { return n.toFixed(1); }).join(","); }).join(" ");
     var dots = dataPts.map(function (p, i) {
       return '<circle cx="' + p[0].toFixed(1) + '" cy="' + p[1].toFixed(1) + '" r="3" fill="' + DATA.riasec.types[order[i]].color + '"/>';
     }).join("");
     return '<svg class="radar" viewBox="0 0 260 248" role="img" aria-label="霍兰德六型兴趣雷达图">' +
       grid + axes +
-      '<polygon points="' + dataPoly + '" fill="rgba(20,80,163,0.18)" stroke="#1450A3" stroke-width="2" stroke-linejoin="round"/>' +
+      '<polygon points="' + dataPoly + '" fill="rgba(20,80,163,0.16)" stroke="#1450A3" stroke-width="2" stroke-linejoin="round"/>' +
       dots + labels + "</svg>";
   }
 
@@ -160,90 +169,317 @@
     }
     return DATA.decision.tiers[3];
   }
+  function odysseyTouched() {
+    return ["a", "b", "c"].some(function (k) {
+      var od = S.odyssey[k];
+      return (od.title && od.title.trim()) || od.years.join("").trim() || (od.questions && od.questions.trim());
+    });
+  }
 
   /* ---------------- 通用 UI 片段 ---------------- */
   function card(inner, cls) { return '<section class="card ' + (cls || "") + '">' + inner + "</section>"; }
   function empty(text) { return '<div class="empty">' + esc(text) + "</div>"; }
-  function seg(tabs, active, base) {
-    return '<div class="seg">' + tabs.map(function (t) {
-      return '<a class="seg-btn' + (t.key === active ? " active" : "") + '" href="#/' + base + "/" + t.key + '">' + t.name + "</a>";
-    }).join("") + "</div>";
-  }
   function progressBar(pct, cls) {
     return '<div class="bar ' + (cls || "") + '"><i style="width:' + Math.max(0, Math.min(100, pct)) + '%"></i></div>';
   }
   function sliderRow(label, attrs, value, min, max, hint) {
     return '<div class="slider-row"><div class="slider-label">' + esc(label) +
-      (hint ? '<small>' + esc(hint) + "</small>" : "") + "</div>" +
+      (hint ? "<small>" + esc(hint) + "</small>" : "") + "</div>" +
       '<input type="range" min="' + min + '" max="' + max + '" step="1" value="' + value + '" ' + attrs + ">" +
       "<output>" + value + "</output></div>";
   }
 
-  /* ---------------- 视图：首页 ---------------- */
-  function allChecklistItems() {
-    var arr = [];
-    DATA.phases.forEach(function (p) { p.items.forEach(function (it) { arr.push(it); }); });
-    return arr;
-  }
-  function viewHome() {
-    var total = allChecklistItems().length;
-    var done = allChecklistItems().filter(function (it) { return S.checklist[it.id]; }).length;
-    var hist = S.riasec.history;
-    var ivDone = S.interviews.filter(function (i) { return i.status === "done"; }).length;
-
-    var cta;
-    if (S.riasec.inProgress || answeredCount() > 0) {
-      cta = { label: "继续霍兰德测评（" + answeredCount() + "/" + DATA.riasec.questions.length + "）", to: "#/assess" };
-    } else if (hist.length) {
-      cta = { label: "查看我的兴趣画像 · " + hist[0].code, to: "#/assess" };
+  /* ---------------- 开场定向（首次启动三屏） ---------------- */
+  function renderOnboarding() {
+    var root = $("#modal-root");
+    if (S.profile.onboarded) {
+      if (root.getAttribute("data-ob")) { root.innerHTML = ""; root.removeAttribute("data-ob"); }
+      return;
+    }
+    root.setAttribute("data-ob", "1");
+    var inner = "";
+    if (ob.step === 0) {
+      inner = '<p class="ob-hi">' + DATA.onboarding.hello + "</p>" +
+        "<h2>" + DATA.app.name + "</h2>" +
+        '<p class="ob-intro">' + DATA.onboarding.intro + "</p>" +
+        DATA.onboarding.personas.map(function (p) {
+          return '<button class="ob-opt" data-act="ob-persona" data-v="' + p.key + '"><b>' + p.name + "</b><small>" + p.desc + "</small></button>";
+        }).join("");
+    } else if (ob.step === 1) {
+      inner = '<button class="ob-back" data-act="ob-back">' + ICONS.back + " 上一步</button>" +
+        "<h2>现在到哪一步了？</h2>" +
+        '<p class="ob-intro">阶段不同，该做的事不同。之后随时可以在时间线上切换。</p>' +
+        DATA.onboarding.phases.map(function (p) {
+          return '<button class="ob-opt" data-act="ob-phase" data-v="' + p.key + '"><b>' + p.name + "</b><small>" + p.desc + "</small></button>";
+        }).join("");
     } else {
-      cta = { label: "从 6 分钟霍兰德测评开始", to: "#/assess" };
+      inner = "<h2>" + (ob.persona === "parent" ? "欢迎，领航的家人" : "欢迎登船") + "</h2>" +
+        '<p class="ob-intro">' + DATA.onboarding.welcome[ob.persona] + "</p>" +
+        '<button class="btn btn-cta btn-block" data-act="ob-start">进入航程</button>';
+    }
+    root.innerHTML = '<div class="ob"><div class="ob-card">' + inner + "</div></div>";
+  }
+
+  /* ---------------- 底部浮层（对话式输入） ---------------- */
+  function sheetWrap(title, lead, inner) {
+    return '<div class="sheet-mask" data-act="sheet-close"><div class="sheet" data-act="noop">' +
+      '<button class="sheet-x" data-act="sheet-close" aria-label="关闭">' + ICONS.close + "</button>" +
+      '<div class="sheet-bar"></div><h3>' + title + "</h3>" +
+      (lead ? '<p class="sheet-lead">' + lead + "</p>" : "") +
+      inner + "</div></div>";
+  }
+  var SHEETS = {
+    flow: function () {
+      var sigs = DATA.flowSignals.map(function (s, i) {
+        return '<label class="sig"><input type="checkbox" class="flow-sig" value="' + i + '"><span>' + s + "</span></label>";
+      }).join("");
+      return sheetWrap("记一个心流时刻",
+        isParent() ? "孩子做什么时会忘记时间、不需催促？" : "过去三年，做什么让你忘记时间？",
+        '<input class="input" id="flow-activity" maxlength="40" placeholder="那件事，比如：拼装模型 / 写剧本 / 调试代码">' +
+        '<input class="input" id="flow-when" maxlength="30" placeholder="大概什么时候？（选填）">' +
+        '<p class="lbl">出现了哪些信号？</p><div class="sigs">' + sigs + "</div>" +
+        '<textarea class="input" id="flow-note" rows="2" placeholder="补充细节（选填）"></textarea>' +
+        '<button class="btn btn-cta btn-block" data-act="flow-add">存进罗盘</button>');
+    },
+    ach: function () {
+      return sheetWrap("一件最有成就感的事",
+        "反复出现的“动机模式”，往往指向天赋所在。",
+        '<input class="input" id="ach-event" maxlength="60" placeholder="那件事，比如：带队拿了机器人比赛二等奖">' +
+        '<input class="input" id="ach-role" maxlength="60" placeholder="具体做了什么？">' +
+        '<input class="input" id="ach-pattern" maxlength="60" placeholder="最让人兴奋的点是什么？">' +
+        '<button class="btn btn-cta btn-block" data-act="ach-add">存进罗盘</button>');
+    },
+    iv: function () {
+      var statusOpts = DATA.interview.statuses.map(function (s) {
+        return '<option value="' + s.key + '">' + s.name + "</option>";
+      }).join("");
+      return sheetWrap("添加访谈对象",
+        "从亲友、校友里找目标行业的人，用一线信息检验想象。",
+        '<input class="input" id="iv-person" maxlength="20" placeholder="对方称呼，比如：李叔叔 / 王学长">' +
+        '<input class="input" id="iv-occ" maxlength="30" placeholder="职业 / 行业，比如：三甲医院骨科医生">' +
+        '<div class="row2"><input class="input" id="iv-rel" maxlength="20" placeholder="关系（选填）">' +
+        '<select class="input" id="iv-status">' + statusOpts + "</select></div>" +
+        '<button class="btn btn-cta btn-block" data-act="iv-add">添加</button>');
+    },
+    cand: function () {
+      var tierOpts = DATA.decision.tiers.map(function (t) {
+        return '<option value="' + t.key + '"' + (t.key === "unset" ? " selected" : "") + ">" + t.name + "</option>";
+      }).join("");
+      return sheetWrap("捞一个方向进池子",
+        "先记下来就好，出分后再打分排序。",
+        '<input class="input" id="cand-school" maxlength="30" placeholder="院校名称（必填）">' +
+        '<input class="input" id="cand-major" maxlength="30" placeholder="专业 / 专业组（建议填写）">' +
+        '<div class="row2"><input class="input" id="cand-city" maxlength="20" placeholder="城市（选填）">' +
+        '<select class="input" id="cand-tier">' + tierOpts + "</select></div>" +
+        '<button class="btn btn-cta btn-block" data-act="cand-add">放进方向池</button>');
+    }
+  };
+  function openSheet(name) {
+    if (!SHEETS[name]) return;
+    $("#modal-root").innerHTML = SHEETS[name]();
+  }
+  function closeSheet() {
+    var root = $("#modal-root");
+    if (!root.getAttribute("data-ob")) root.innerHTML = "";
+  }
+
+  /* ---------------- 下一步推荐引擎 ---------------- */
+  function stepCta(st, cls) {
+    if (st.sheet) return '<button class="' + cls + '" data-act="sheet-open" data-sheet="' + st.sheet + '">' + st.cta + "</button>";
+    if (st.ext) return '<a class="' + cls + '" href="' + st.ext + '" target="_blank" rel="noopener">' + st.cta + " " + ICONS.ext + "</a>";
+    return '<a class="' + cls + '" href="' + st.to + '">' + st.cta + "</a>";
+  }
+  function nextSteps() {
+    var p = isParent();
+    var hist = S.riasec.history.length;
+    var flows = S.flows.length;
+    var ach = S.achievements.length;
+    var cands = S.decision.candidates.length;
+    var ivs = S.interviews.length;
+    var list = [];
+
+    function quizStep() {
+      return p
+        ? { tag: "罗盘", title: "请孩子先校准罗盘", body: "把手机递给孩子：6 分钟兴趣自评。提醒彼此——结果是聊天素材，不是判决书。", cta: "打开测评", to: "#/compass/quiz" }
+        : { tag: "罗盘", title: "先把罗盘校准", body: "6 分钟、48 道「喜欢 / 一般 / 不喜欢」，看清你的兴趣指向哪片海域。", cta: "开始兴趣测评", to: "#/compass/quiz" };
     }
 
-    var hero = '<section class="hero">' +
-      '<h1>' + DATA.app.name + "</h1>" +
-      '<p class="hero-sub">' + DATA.app.tagline + "</p>" +
-      '<div class="hero-progress"><span>行动进度 ' + done + " / " + total + "</span>" + progressBar(done / total * 100, "bar-light") + "</div>" +
-      '<a class="btn btn-hero" href="' + cta.to + '">' + cta.label + "</a>" +
-      "</section>";
-
-    var kpis = '<section class="kpis">' +
-      '<a class="kpi" href="#/assess"><b>' + (hist.length ? hist[0].code : "—") + "</b><span>兴趣画像</span></a>" +
-      '<a class="kpi" href="#/explore/flow"><b>' + S.flows.length + "</b><span>心流线索</span></a>" +
-      '<a class="kpi" href="#/explore/interview"><b>' + ivDone + "/" + S.interviews.length + "</b><span>人物访谈</span></a>" +
-      '<a class="kpi" href="#/decide"><b>' + S.decision.candidates.length + "</b><span>候选方案</span></a>" +
-      "</section>";
-
-    var phases = DATA.phases.map(function (p) {
-      var pd = p.items.filter(function (it) { return S.checklist[it.id]; }).length;
-      var rows = p.items.map(function (it) {
-        var checked = !!S.checklist[it.id];
-        var link = "";
-        if (it.link) {
-          link = it.ext
-            ? '<a class="check-link" href="' + it.link + '" target="_blank" rel="noopener">' + ICONS.ext + "</a>"
-            : '<a class="check-link" href="' + it.link + '">' + ICONS.chev + "</a>";
-        }
-        return '<div class="checkrow' + (checked ? " done" : "") + '">' +
-          '<label class="check-main"><input type="checkbox" data-check="' + it.id + '"' + (checked ? " checked" : "") + ">" +
-          '<span class="cbox"></span><span class="check-text">' + esc(it.text) +
-          (it.hint ? "<small>" + esc(it.hint) + "</small>" : "") + "</span></label>" + link + "</div>";
-      }).join("");
-      return card('<div class="phase-head"><div><h3>' + esc(p.name) + '</h3><p class="phase-meta">' + esc(p.period) + " · " + esc(p.goal) + "</p></div>" +
-        '<span class="phase-count">' + pd + "/" + p.items.length + "</span></div>" +
-        progressBar(pd / p.items.length * 100) + '<div class="checklist">' + rows + "</div>");
-    }).join("");
-
-    var th = card("<h3>三个关键信号 · 何时调整策略</h3>" + DATA.thresholds.map(function (t) {
-      return '<div class="th-row"><p class="th-when">' + esc(t.when) + '</p><p class="th-then">' + esc(t.then) + "</p></div>";
-    }).join(""));
-
-    var quote = '<blockquote class="quote">“' + DATA.app.quote + '”<cite>—— ' + DATA.app.quoteBy + "</cite></blockquote>";
-
-    return hero + kpis + phases + th + quote;
+    if (S.profile.phase === "before") {
+      if (!hist) list.push(quizStep());
+      if (flows < 3) list.push(p
+        ? { tag: "线索", title: "一起列心流清单（" + flows + "/3）", body: "回想孩子做什么时忘记时间、不需催促、做完发光——这比任何测评都可靠。", cta: "记一条心流", sheet: "flow" }
+        : { tag: "线索", title: "记下心流时刻（" + flows + "/3）", body: "过去三年，做什么会让你忘记时间？那里埋着天赋线索。", cta: "记一条心流", sheet: "flow" });
+      if (!odysseyTouched()) list.push(p
+        ? { tag: "想象", title: "今晚陪他写三种五年", body: "奥德赛计划的家规：只问不评判。听比说重要。", cta: "了解怎么陪", to: "#/compass/odyssey" }
+        : { tag: "想象", title: "今晚，写三种五年", body: "延伸版、突变版、自由版——先让想象发散，再一起讨论。", cta: "去写奥德赛计划", to: "#/compass/odyssey" });
+      if (cands < 5) list.push(p
+        ? { tag: "方向", title: "帮他把方向捞进池子", body: "已有 " + cands + " 个。一起搜集 5–8 个方向的资料：学什么、就业去向、选科要求。", cta: "添加一个方向", sheet: "cand" }
+        : { tag: "方向", title: "把模糊的兴趣捞进方向池", body: "已有 " + cands + " 个。把 5–8 个「隐约感兴趣」的专业 / 职业丢进来，先不用打分。", cta: "添加一个方向", sheet: "cand" });
+      if (!ach) list.push({ tag: "线索", title: "写一件最有成就感的事", body: "具体做了什么？什么让人兴奋？反复出现的动机模式，指向天赋。", cta: "写一件", sheet: "ach" });
+      if (!list.length) list.push({ tag: "航程", title: "出分前的功课齐了", body: "等待也是航程的一部分。出分那天，点上方时间线进入下一段。", cta: "看看我的罗盘", to: "#/compass" });
+    } else if (S.profile.phase === "scored") {
+      if (!hist) list.push(quizStep());
+      if (cands < 3) list.push({ tag: "方向", title: "用位次补齐方向池", body: "已有 " + cands + " 个。出分了：以「位次」而非绝对分定位，把够得着的院校 + 专业放进来。", cta: "添加方向", sheet: "cand" });
+      if (ivs < 2) list.push(p
+        ? { tag: "检验", title: "帮孩子约 2–3 场访谈", body: "已安排 " + ivs + " 场。你的人脉正好用在这里：亲友、校友里找目标行业的人。", cta: "添加访谈对象", sheet: "iv" }
+        : { tag: "检验", title: "约 2–3 场人物访谈", body: "已安排 " + ivs + " 场。从亲友、校友里找目标行业的人，用一线信息检验想象。", cta: "添加访谈对象", sheet: "iv" });
+      var hasDefault = S.decision.candidates.some(function (c) {
+        var allFive = DATA.decision.dims.every(function (d) { return (Number(c.scores[d.key]) || 0) === 5; });
+        return allFive && !(c.note && c.note.trim());
+      });
+      if (cands >= 2 && hasDefault) list.push({ tag: "决策", title: "给候选方案打分", body: "六个维度滑一滑，把「感觉」变成可以摆上桌面讨论的数字。", cta: "去打分", to: "#/chart" });
+      var unset = S.decision.candidates.some(function (c) { return !c.tier || c.tier === "unset"; });
+      if (cands > 0 && unset) list.push({ tag: "决策", title: "把方案归进冲 · 稳 · 保", body: "形成有梯度的志愿表，别把所有鸡蛋放在一档里。", cta: "去归档", to: "#/chart/tier" });
+      list.push({ tag: "收尾", title: "最后一道工序", body: "用位次在「阳光志愿」里核对冲稳保梯度，再请班主任把关一遍。", cta: "打开阳光志愿", ext: "https://gaokao.chsi.com.cn/zyck/" });
+    } else {
+      if (p) {
+        list.push({ tag: "心态", title: "从决定者退到顾问", body: "路已经选了，现在他最需要的是信任。提供资源、接住情绪，把方向盘交给他。", cta: "打开家长指南", to: "#/more/parents" });
+        list.push({ tag: "心态", title: "两句话常挂嘴边", body: "①兴趣可以养成，不必现在就找到唯一热爱；②专业不是一考定终身。", cta: "看理论依据", to: "#/more/knowledge" });
+      } else {
+        list.push({ tag: "心态", title: "航程才刚开始", body: "转专业、辅修、考研都是真实的修正机会。大学是广泛尝试 + 在一个方向积累硬技能的黄金期。", cta: "看长期心态卡片", to: "#/more/knowledge" });
+        list.push({ tag: "线索", title: "别丢下你的罗盘", body: "心流还在发生——进了大学也继续记录，它会一直为你指向。", cta: "记一条心流", sheet: "flow" });
+      }
+    }
+    return list.slice(0, 3);
   }
 
-  /* ---------------- 视图：测评 ---------------- */
+  /* ---------------- 阶段时间线 ---------------- */
+  function timeline() {
+    var idx = DATA.stages.findIndex(function (s) { return s.key === S.profile.phase; });
+    return '<div class="tl">' + DATA.stages.map(function (s, i) {
+      var cls = i < idx ? " past" : i === idx ? " cur" : "";
+      return '<button class="tl-node' + cls + '" data-act="set-phase" data-v="' + s.key + '"><i></i><b>' + s.name + "</b><small>" + s.sub + "</small></button>";
+    }).join('<span class="tl-line"></span>') + "</div>";
+  }
+
+  /* ---------------- 视图：此刻 ---------------- */
+  function phaseChecklist(phase, open) {
+    var done = phase.items.filter(function (it) { return S.checklist[it.id]; }).length;
+    var rows = phase.items.map(function (it) {
+      var checked = !!S.checklist[it.id];
+      var link = "";
+      if (it.link) {
+        link = it.ext
+          ? '<a class="check-link" href="' + it.link + '" target="_blank" rel="noopener">' + ICONS.ext + "</a>"
+          : '<a class="check-link" href="' + it.link + '">' + ICONS.chev + "</a>";
+      }
+      return '<div class="checkrow' + (checked ? " done" : "") + '">' +
+        '<label class="check-main"><input type="checkbox" data-check="' + it.id + '"' + (checked ? " checked" : "") + ">" +
+        '<span class="cbox"></span><span class="check-text">' + esc(it.text) +
+        (it.hint ? "<small>" + esc(it.hint) + "</small>" : "") + "</span></label>" + link + "</div>";
+    }).join("");
+    return { html: rows, done: done, total: phase.items.length };
+  }
+
+  function viewNow() {
+    var steps = nextSteps();
+    var html = card(timeline(), "tl-card");
+
+    var first = steps[0];
+    html += '<section class="card next-hero">' +
+      '<span class="nh-tag">下一步 · ' + first.tag + "</span>" +
+      "<h2>" + first.title + "</h2><p>" + first.body + "</p>" +
+      stepCta(first, "btn btn-cta btn-block") + "</section>";
+
+    if (steps.length > 1) {
+      html += '<p class="group-title">然后可以</p>' + steps.slice(1).map(function (st) {
+        var inner = '<div class="nm-main"><b>' + st.title + "</b><small>" + st.body + "</small></div>" + ICONS.chev;
+        if (st.sheet) return '<button class="card next-mini" data-act="sheet-open" data-sheet="' + st.sheet + '">' + inner + "</button>";
+        if (st.ext) return '<a class="card next-mini" href="' + st.ext + '" target="_blank" rel="noopener">' + inner + "</a>";
+        return '<a class="card next-mini" href="' + st.to + '">' + inner + "</a>";
+      }).join("");
+    }
+
+    var phaseMap = { before: "p1", scored: "p2", after: "p3" };
+    var curId = phaseMap[S.profile.phase];
+    var cur = null, others = [];
+    DATA.phases.forEach(function (ph) { if (ph.id === curId) cur = ph; else others.push(ph); });
+    var cl = phaseChecklist(cur);
+    html += card('<div class="phase-head"><div><h3>本阶段清单</h3><p class="phase-meta">' + esc(cur.period) + " · " + esc(cur.goal) + "</p></div>" +
+      '<span class="phase-count">' + cl.done + "/" + cl.total + "</span></div>" +
+      progressBar(cl.done / cl.total * 100) +
+      '<div class="checklist">' + cl.html + "</div>" +
+      '<div class="acc"><button class="acc-head" data-act="acc">其他阶段的清单 ' + ICONS.down + "</button>" +
+      '<div class="acc-body">' + others.map(function (ph) {
+        var c = phaseChecklist(ph);
+        return '<p class="lbl">' + esc(ph.name) + "（" + c.done + "/" + c.total + "）</p>" + '<div class="checklist">' + c.html + "</div>";
+      }).join("") + "</div></div>");
+
+    html += card('<div class="acc"><button class="acc-head" data-act="acc">三个关键信号 · 何时调整策略 ' + ICONS.down + "</button>" +
+      '<div class="acc-body">' + DATA.thresholds.map(function (t) {
+        return '<div class="th-row"><p class="th-when">' + esc(t.when) + '</p><p class="th-then">' + esc(t.then) + "</p></div>";
+      }).join("") + "</div></div>");
+
+    html += card('<div class="id-row"><span class="lbl-inline">我的身份</span>' +
+      '<button class="chip chip-pick' + (!isParent() ? " on" : "") + '" style="--tc:#1450A3" data-act="set-persona" data-v="student">考生</button>' +
+      '<button class="chip chip-pick' + (isParent() ? " on" : "") + '" style="--tc:#1450A3" data-act="set-persona" data-v="parent">家长</button>' +
+      '<small class="id-hint">阶段不对？点上方时间线切换</small></div>');
+
+    html += '<blockquote class="quote">“' + DATA.app.quote + '”<cite>—— ' + DATA.app.quoteBy + "</cite></blockquote>";
+    return html;
+  }
+
+  /* ---------------- 视图：罗盘 ---------------- */
+  function viewCompass() {
+    var html = "";
+    var hist = S.riasec.history;
+
+    if (S.riasec.inProgress || answeredCount() > 0) {
+      html += card('<span class="nh-tag">罗盘</span><h2>测评进行中</h2><p>已完成 ' + answeredCount() + " / " + DATA.riasec.questions.length + ' 题，进度已保存。</p>' +
+        '<a class="btn btn-cta btn-block" href="#/compass/quiz">继续校准</a>', "next-hero");
+    } else if (hist.length) {
+      var h = hist[0];
+      var sorted = sortTypes(h.scores);
+      var top = sorted.slice(0, 3);
+      var codeHtml = top.map(function (t) {
+        return '<span class="code-letter" style="color:' + DATA.riasec.types[t].color + '">' + t + "</span>";
+      }).join("");
+      html += card('<p class="lbl">我的霍兰德代码 · ' + fmtDate(h.date) + "</p>" +
+        '<div class="code-row">' + codeHtml + "</div>" +
+        radarSvg(h.scores) +
+        '<div class="btn-row"><a class="btn" href="#/compass/quiz">查看完整解读</a>' +
+        '<a class="btn btn-ghost" href="#/compass/quiz">重新校准</a></div>', "cmp-hero");
+    } else {
+      html += card('<span class="nh-tag">罗盘</span><h2>罗盘尚未校准</h2><p>6 分钟兴趣测评，看清你的兴趣指向哪片海域。结果是草稿，不是判决书。</p>' +
+        '<a class="btn btn-cta btn-block" href="#/compass/quiz">开始测评</a>', "next-hero");
+    }
+
+    var hot = S.flows.filter(function (f) { return (f.signals || []).length >= 3; });
+    html += card('<div class="sec-head"><h3>心流线索</h3><span class="sec-count">' + S.flows.length + " 条</span></div>" +
+      (hot.length
+        ? '<p class="sec-sub">出现 3 个以上信号的活动：</p><div class="chips">' + hot.map(function (f) { return '<span class="chip chip-hot">' + esc(f.activity) + "</span>"; }).join("") + "</div>"
+        : '<p class="sec-sub">' + (S.flows.length ? "继续记录，等待强信号浮现。" : "做什么会忘记时间？最可靠的天赋线索。") + "</p>") +
+      '<div class="btn-row"><button class="btn btn-ghost" data-act="sheet-open" data-sheet="flow">' + ICONS.plus + ' 记一条</button>' +
+      '<a class="btn btn-ghost" href="#/compass/flow">查看全部</a></div>');
+
+    html += card('<div class="sec-head"><h3>成就动机</h3><span class="sec-count">' + S.achievements.length + " 件</span></div>" +
+      (S.achievements.length
+        ? '<div class="chips">' + S.achievements.slice(0, 4).map(function (a) { return '<span class="chip chip-soft">' + esc(a.pattern || a.event) + "</span>"; }).join("") + "</div>"
+        : '<p class="sec-sub">最有成就感的事里，藏着反复出现的动机模式。</p>') +
+      '<div class="btn-row"><button class="btn btn-ghost" data-act="sheet-open" data-sheet="ach">' + ICONS.plus + ' 写一件</button>' +
+      '<a class="btn btn-ghost" href="#/compass/flow">查看全部</a></div>');
+
+    var odRows = DATA.odyssey.versions.map(function (v) {
+      var od = S.odyssey[v.key];
+      return '<a class="od-row" href="#/compass/odyssey"><span class="od-dot od-' + v.key + '"></span>' +
+        "<b>" + (od.title ? esc(od.title) : '<span class="od-empty">' + v.name.split(" · ")[1] + "：还没写</span>") + "</b>" +
+        (od.title ? '<small>喜欢 ' + od.gauges.like + "</small>" : "") + ICONS.chev + "</a>";
+    }).join("");
+    html += card('<div class="sec-head"><h3>奥德赛 · 三种五年</h3></div>' + odRows);
+
+    var gains = S.interviews.filter(function (i) { return i.gain && i.gain.trim(); });
+    html += card('<div class="sec-head"><h3>访谈收获</h3><span class="sec-count">' + S.interviews.length + " 场</span></div>" +
+      (gains.length
+        ? gains.slice(0, 2).map(function (i) { return '<p class="iv-quote">“' + esc(i.gain) + '”<small>—— 访谈 ' + esc(i.person) + "</small></p>"; }).join("")
+        : '<p class="sec-sub">' + (S.interviews.length ? "完成访谈后，把收获记在访谈条目里。" : "用一线的真实信息，检验对职业的想象。") + "</p>") +
+      '<div class="btn-row"><button class="btn btn-ghost" data-act="sheet-open" data-sheet="iv">' + ICONS.plus + ' 添加</button>' +
+      '<a class="btn btn-ghost" href="#/compass/interview">查看全部</a></div>');
+
+    html += '<a class="card next-mini" href="#/compass/quiz"><div class="nm-main"><b>更多权威免费测评</b><small>VIA 性格优势 · 阳光志愿四维 · 学职平台 · 大五人格</small></div>' + ICONS.chev + "</a>";
+    return html;
+  }
+
+  /* ---------------- 视图：兴趣测评页 ---------------- */
   function viewToolsSection() {
     var cards = DATA.tools.map(function (t) {
       var head = '<div class="tool-head"><b>' + esc(t.name) + '</b><span class="badge badge-' + t.grade + '">' + esc(t.badge) + "</span></div>";
@@ -256,7 +492,7 @@
       '<div class="acc-body"><p>' + esc(DATA.toolsNote) + "</p></div></div>");
   }
 
-  function viewAssess() {
+  function viewQuiz() {
     var r = S.riasec;
     var qs = DATA.riasec.questions;
 
@@ -284,8 +520,8 @@
     var n = answeredCount();
 
     if (n > 0) {
-      html += card("<h3>霍兰德兴趣探索（进行中）</h3><p>已完成 " + n + " / " + qs.length + " 题，进度已保存。</p>" +
-        '<div class="btn-row"><button class="btn" data-act="riasec-resume">继续测评</button>' +
+      html += card("<h3>测评进行中</h3><p>已完成 " + n + " / " + qs.length + " 题，进度已保存。</p>" +
+        '<div class="btn-row"><button class="btn btn-cta" data-act="riasec-resume">继续测评</button>' +
         '<button class="btn btn-ghost" data-act="riasec-retake">重新开始</button></div>');
     } else if (r.history.length) {
       var h = r.history[0];
@@ -330,43 +566,28 @@
         '<div class="tbars">' + bars + "</div>" +
         '<p class="note">' + esc(DATA.riasec.note) + "</p>", "result-card");
       html += card("<h3>前三型解读</h3>" + typeCards +
-        '<div class="btn-row"><a class="btn" href="#/decide">把感兴趣的专业加入决策 →</a>' +
+        '<div class="btn-row"><a class="btn btn-cta" href="#/chart">把感兴趣的方向加进航海图</a>' +
         '<button class="btn btn-ghost" data-act="riasec-retake">重新测评</button></div>' + histList);
     } else {
       html += card("<h3>霍兰德兴趣探索</h3><p>" + esc(DATA.riasec.intro) + "</p>" +
         '<p class="note">' + qs.length + " 道题 · 约 6 分钟 · 进度自动保存</p>" +
-        '<button class="btn btn-block" data-act="riasec-start">开始测评</button>');
+        '<button class="btn btn-cta btn-block" data-act="riasec-start">开始测评</button>');
     }
 
     html += viewToolsSection();
     return html;
   }
 
-  /* ---------------- 视图：探索 ---------------- */
-  function viewExplore(sub) {
-    var tabs = [{ key: "flow", name: "心流线索" }, { key: "odyssey", name: "奥德赛计划" }, { key: "interview", name: "人物访谈" }];
-    var body = sub === "odyssey" ? viewOdyssey() : sub === "interview" ? viewInterview() : viewFlow();
-    return seg(tabs, sub || "flow", "explore") + body;
-  }
-
-  function viewFlow() {
-    var html = card("<h3>心流时刻清单</h3><p>" + esc(DATA.flowIntro) + "</p>");
+  /* ---------------- 视图：心流与成就页 ---------------- */
+  function viewFlowPage() {
+    var html = card("<h3>心流时刻清单</h3><p>" + esc(DATA.flowIntro) + "</p>" +
+      '<button class="btn btn-cta btn-block" data-act="sheet-open" data-sheet="flow">' + ICONS.plus + " 记一个心流时刻</button>");
 
     var strong = S.flows.filter(function (f) { return (f.signals || []).length >= 3; });
     if (strong.length) {
       html += card('<h3>天赋线索小结</h3><p>这些活动出现了 3 个以上信号，值得认真对待：</p><div class="chips">' +
         strong.map(function (f) { return '<span class="chip chip-hot">' + esc(f.activity) + "</span>"; }).join("") + "</div>", "hint-card");
     }
-
-    var sigBoxes = DATA.flowSignals.map(function (s, i) {
-      return '<label class="sig"><input type="checkbox" class="flow-sig" value="' + i + '"><span>' + s + "</span></label>";
-    }).join("");
-    html += card("<h3>记录一个心流时刻</h3>" +
-      '<input class="input" id="flow-activity" maxlength="40" placeholder="活动名称，比如：拼装机甲模型 / 写剧本 / 调试代码">' +
-      '<input class="input" id="flow-when" maxlength="30" placeholder="大概什么时候？比如：高二下学期（选填）">' +
-      '<p class="lbl">出现了哪些信号？</p><div class="sigs">' + sigBoxes + "</div>" +
-      '<textarea class="input" id="flow-note" rows="2" placeholder="补充细节（选填）"></textarea>' +
-      '<button class="btn btn-block" data-act="flow-add">' + ICONS.plus + " 添加记录</button>");
 
     if (S.flows.length) {
       html += S.flows.map(function (f) {
@@ -378,25 +599,22 @@
           (f.note ? '<p class="item-note">' + esc(f.note) + "</p>" : ""), "item-card");
       }).join("");
     } else {
-      html += empty("还没有记录。回想过去三年：做什么时你会忘记时间？");
+      html += empty("还没有记录。回想过去三年：做什么时会忘记时间？");
     }
 
     html += card("<h3>成就事件分析</h3><p>" + esc(DATA.achieveIntro) + "</p>" +
-      '<input class="input" id="ach-event" maxlength="60" placeholder="一件最有成就感的事，比如：带队拿了机器人比赛二等奖">' +
-      '<input class="input" id="ach-role" maxlength="60" placeholder="你具体做了什么？">' +
-      '<input class="input" id="ach-pattern" maxlength="60" placeholder="最让你兴奋的点是什么？（动机模式）">' +
-      '<button class="btn btn-block btn-ghost" data-act="ach-add">' + ICONS.plus + " 添加成就事件</button>" +
+      '<button class="btn btn-ghost btn-block" data-act="sheet-open" data-sheet="ach">' + ICONS.plus + " 写一件成就事件</button>" +
       (S.achievements.length ? S.achievements.map(function (a) {
         return '<div class="ach"><div class="item-head"><b>' + esc(a.event) + "</b>" +
           '<button class="icon-btn" data-act="ach-del" data-id="' + a.id + '" aria-label="删除">' + ICONS.trash + "</button></div>" +
           (a.role ? '<p class="item-meta">我做了：' + esc(a.role) + "</p>" : "") +
           (a.pattern ? '<p class="item-note">动机模式：' + esc(a.pattern) + "</p>" : "") + "</div>";
       }).join("") : ""));
-
     return html;
   }
 
-  function viewOdyssey() {
+  /* ---------------- 视图：奥德赛页 ---------------- */
+  function viewOdysseyPage() {
     var html = card("<h3>奥德赛计划 · 三个五年</h3><p>" + esc(DATA.odyssey.intro) + '</p><p class="note">内容自动保存在本机。</p>');
     html += DATA.odyssey.versions.map(function (v) {
       var od = S.odyssey[v.key];
@@ -416,21 +634,12 @@
     return html;
   }
 
-  function viewInterview() {
+  /* ---------------- 视图：访谈页 ---------------- */
+  function viewInterviewPage() {
     var html = card("<h3>生涯人物访谈</h3><p>" + esc(DATA.interview.intro) + "</p>" +
       '<p class="lbl">四个推荐问题</p><ol class="qlist">' +
-      DATA.interview.questions.map(function (q) { return "<li>" + q + "</li>"; }).join("") + "</ol>");
-
-    var statusOpts = DATA.interview.statuses.map(function (s) {
-      return '<option value="' + s.key + '">' + s.name + "</option>";
-    }).join("");
-    html += card("<h3>添加访谈对象</h3>" +
-      '<input class="input" id="iv-person" maxlength="20" placeholder="对方称呼，比如：李叔叔 / 王学长">' +
-      '<input class="input" id="iv-occ" maxlength="30" placeholder="职业 / 行业，比如：三甲医院骨科医生">' +
-      '<div class="row2">' +
-      '<input class="input" id="iv-rel" maxlength="20" placeholder="关系（选填）">' +
-      '<select class="input" id="iv-status">' + statusOpts + "</select></div>" +
-      '<button class="btn btn-block" data-act="iv-add">' + ICONS.plus + " 添加</button>");
+      DATA.interview.questions.map(function (q) { return "<li>" + q + "</li>"; }).join("") + "</ol>" +
+      '<button class="btn btn-cta btn-block" data-act="sheet-open" data-sheet="iv">' + ICONS.plus + " 添加访谈对象</button>");
 
     if (S.interviews.length) {
       html += S.interviews.map(function (iv) {
@@ -449,7 +658,7 @@
           (iv.relation ? '<p class="item-meta">' + esc(iv.relation) + "</p>" : "") +
           '<div class="acc-body">' + qa +
           '<p class="lbl">我的收获</p>' +
-          '<textarea class="input" rows="2" data-iid="' + iv.id + '" data-field="gain" placeholder="听完之后，你对这条路的想象有什么变化？">' + esc(iv.gain || "") + "</textarea>" +
+          '<textarea class="input" rows="2" data-iid="' + iv.id + '" data-field="gain" placeholder="听完之后，对这条路的想象有什么变化？">' + esc(iv.gain || "") + "</textarea>" +
           '<button class="btn btn-ghost btn-sm btn-danger-text" data-act="iv-del" data-id="' + iv.id + '">' + ICONS.trash + " 删除这条访谈</button>" +
           "</div></section>";
       }).join("");
@@ -459,34 +668,31 @@
     return html;
   }
 
-  /* ---------------- 视图：决策 ---------------- */
-  function viewDecide(sub) {
-    var tabs = [{ key: "sheet", name: "决策平衡单" }, { key: "tier", name: "冲稳保梯度" }];
-    var body = sub === "tier" ? viewTier() : viewSheet();
-    return seg(tabs, sub || "sheet", "decide") + body;
+  /* ---------------- 视图：航海图 ---------------- */
+  function chartSeg(active) {
+    return '<div class="seg">' +
+      '<a class="seg-btn' + (active === "pool" ? " active" : "") + '" href="#/chart">方向池与打分</a>' +
+      '<a class="seg-btn' + (active === "tier" ? " active" : "") + '" href="#/chart/tier">冲稳保梯度</a>' +
+      "</div>";
   }
 
-  function viewSheet() {
-    var html = card("<h3>生涯决策平衡单</h3><p>" + esc(DATA.decision.intro) + "</p>");
+  function viewChart(sub) {
+    if (sub === "tier") return chartSeg("tier") + viewTier();
+    return chartSeg("pool") + viewPool();
+  }
+
+  function viewPool() {
+    var cands = S.decision.candidates;
+    var html = card("<h3>方向池 · 决策平衡单</h3><p>" + esc(DATA.decision.intro) + "</p>" +
+      '<button class="btn btn-cta btn-block" data-act="sheet-open" data-sheet="cand">' + ICONS.plus + " 添加一个方向</button>" +
+      '<p class="note">出分前先把「隐约感兴趣」的方向囤进来，出分后再打分。</p>');
 
     var wRows = DATA.decision.dims.map(function (d) {
       return sliderRow(d.name, 'data-w="' + d.key + '"', S.decision.weights[d.key], 1, 5, d.hint);
     }).join("");
-    html += card('<div class="acc"><button class="acc-head" data-act="acc">维度权重（1–5，按你看重的程度调整） ' + ICONS.down + "</button>" +
+    html += card('<div class="acc"><button class="acc-head" data-act="acc">你看重什么 · 维度权重（1–5） ' + ICONS.down + "</button>" +
       '<div class="acc-body">' + wRows + "</div></div>");
 
-    var tierOpts = DATA.decision.tiers.map(function (t) {
-      return '<option value="' + t.key + '"' + (t.key === "unset" ? " selected" : "") + ">" + t.name + "</option>";
-    }).join("");
-    html += card("<h3>添加候选方案</h3>" +
-      '<input class="input" id="cand-school" maxlength="30" placeholder="院校名称（必填）">' +
-      '<input class="input" id="cand-major" maxlength="30" placeholder="专业 / 专业组（建议填写）">' +
-      '<div class="row2"><input class="input" id="cand-city" maxlength="20" placeholder="城市（选填）">' +
-      '<select class="input" id="cand-tier">' + tierOpts + "</select></div>" +
-      '<button class="btn btn-block" data-act="cand-add">' + ICONS.plus + " 添加方案</button>" +
-      '<p class="note">出分前可以先把“隐约感兴趣的 5–8 个专业方向”记进来，出分后再打分。</p>');
-
-    var cands = S.decision.candidates;
     if (cands.length >= 2) {
       var ranked = cands.slice().sort(function (a, b) { return candidateScore(b) - candidateScore(a); });
       html += card("<h3>综合排序</h3>" + ranked.map(function (c, i) {
@@ -497,7 +703,7 @@
           progressBar(pct) + "</div>" +
           '<span class="chip chip-tier" style="background:' + t.color + '">' + t.name + "</span>" +
           '<span class="rank-pct">' + pct + "</span></div>";
-      }).join("") + '<p class="note">分数只是把权衡“摆上桌面”的工具，最终请结合位次与老师意见。</p>');
+      }).join("") + '<p class="note">分数只是把权衡「摆上桌面」的工具，最终请结合位次与老师意见。</p>');
     }
 
     if (cands.length) {
@@ -516,7 +722,7 @@
           '<textarea class="input" rows="2" data-cid="' + c.id + '" data-field="note" placeholder="备注 / SWOT：优势、劣势、机会、风险（选填）">' + esc(c.note || "") + "</textarea>", "item-card");
       }).join("");
     } else {
-      html += empty("还没有候选方案。先把隐约感兴趣的方向加进来。");
+      html += empty("方向池还是空的。把隐约感兴趣的院校 / 专业先捞进来。");
     }
     return html;
   }
@@ -530,7 +736,8 @@
         var t = tierInfo(g);
         var n = S.decision.candidates.filter(function (c) { return c.tier === g; }).length;
         return '<span class="tier-pill" style="background:' + t.color + '">' + t.name + " " + n + "</span>";
-      }).join("") + (unset.length ? '<span class="tier-pill" style="background:#94A3B8">未定 ' + unset.length + "</span>" : "") + "</div>");
+      }).join("") + (unset.length ? '<span class="tier-pill" style="background:#9AA8B5">未定 ' + unset.length + "</span>" : "") + "</div>" +
+      '<p class="note">在「方向池」的方案卡片里点 冲 / 稳 / 保 即可归档。</p>');
 
     groups.forEach(function (g) {
       var t = tierInfo(g);
@@ -539,12 +746,12 @@
         (list.length ? list.map(function (c) {
           return '<div class="rank-row"><div class="rank-main"><b>' + esc(c.school) + (c.major ? " · " + esc(c.major) : "") + "</b></div>" +
             '<span class="rank-pct">' + candidateScore(c) + "</span></div>";
-        }).join("") : empty("暂无方案，在“决策平衡单”里给方案归档。")));
+        }).join("") : empty("暂无方案")));
     });
 
     html += card('<h3>填报提醒</h3><ol class="qlist">' + DATA.decision.tierTips.map(function (t) { return "<li>" + esc(t) + "</li>"; }).join("") + "</ol>" +
       '<p class="item-note">' + esc(DATA.decision.tradeoff) + "</p>" +
-      '<a class="btn btn-block" href="https://gaokao.chsi.com.cn/zyck/" target="_blank" rel="noopener">打开教育部“阳光志愿”系统 ' + ICONS.ext + "</a>");
+      '<a class="btn btn-block" href="https://gaokao.chsi.com.cn/zyck/" target="_blank" rel="noopener">打开教育部「阳光志愿」系统 ' + ICONS.ext + "</a>");
     return html;
   }
 
@@ -561,20 +768,30 @@
       { to: "#/more/data", name: "数据管理", desc: "导出 / 导入 / 清空本机数据" },
       { to: "#/more/about", name: "关于与声明", desc: "版本 · 依据 · 局限" }
     ];
+    if (isParent()) items.unshift(items.splice(0, 1)[0]); // 家长身份时家长专区已在首位
+
     var html = "";
     if (deferredPrompt) {
       html += card('<h3>安装到主屏幕</h3><p>像原生 App 一样离线使用，数据保存在本机。</p>' +
-        '<button class="btn btn-block" data-act="install">安装应用</button>', "install-card");
+        '<button class="btn btn-cta btn-block" data-act="install">安装应用</button>', "install-card");
     }
     html += card(items.map(function (it) {
       return '<a class="navrow" href="' + it.to + '"><div><b>' + it.name + "</b><small>" + it.desc + "</small></div>" + ICONS.chev + "</a>";
     }).join(""));
+
+    html += card('<div class="id-row"><span class="lbl-inline">身份</span>' +
+      '<button class="chip chip-pick' + (!isParent() ? " on" : "") + '" style="--tc:#1450A3" data-act="set-persona" data-v="student">考生</button>' +
+      '<button class="chip chip-pick' + (isParent() ? " on" : "") + '" style="--tc:#1450A3" data-act="set-persona" data-v="parent">家长</button></div>' +
+      '<div class="id-row"><span class="lbl-inline">阶段</span>' +
+      DATA.onboarding.phases.map(function (p) {
+        return '<button class="chip chip-pick' + (S.profile.phase === p.key ? " on" : "") + '" style="--tc:#1450A3" data-act="set-phase" data-v="' + p.key + '">' + p.name + "</button>";
+      }).join("") + "</div>");
     return html;
   }
 
   function viewParents() {
     var p = DATA.parent;
-    var html = card("<h3>为什么是“自主支持”</h3><p>" + esc(p.intro) + "</p>");
+    var html = card("<h3>为什么是「自主支持」</h3><p>" + esc(p.intro) + "</p>");
     html += card("<h3>家长的四个角色</h3>" + '<div class="roles">' + p.roles.map(function (r) {
       return '<div class="role"><b>' + r.name + "</b><small>" + r.desc + "</small></div>";
     }).join("") + "</div>");
@@ -589,7 +806,7 @@
         '<div class="acc-body"><p>' + esc(w.desc) + "</p></div></div>";
     }).join(""));
     html += card("<h3>日常观察法</h3><p>" + esc(p.observe) + "</p>" +
-      '<a class="btn btn-ghost btn-block" href="#/explore/flow">去记录心流线索 →</a>');
+      '<button class="btn btn-ghost btn-block" data-act="sheet-open" data-sheet="flow">记一条心流线索</button>');
     return html;
   }
 
@@ -618,35 +835,42 @@
   function viewAbout() {
     return card("<h3>" + DATA.app.name + " · v" + DATA.app.version + "</h3>" +
       "<p>高中毕业生升学与人生航向规划系统。" + esc(DATA.app.tagline) + "</p>" +
-      '<p class="note">方法论依据：《发现天赋、找到方向》深度研究报告（见仓库 docs/source-report.md），涵盖 Gagné 天赋发展模型、霍兰德 RIASEC、生涯适应力、自我决定理论、奥德赛计划与生涯决策平衡单等。</p>') +
+      '<p class="note">方法论依据：《发现天赋、找到方向》深度研究报告（仓库 docs/source-report.md）；交互与视觉设计逻辑见 docs/design.md。</p>') +
       card("<h3>安装为 App</h3><p>本应用是 PWA：支持离线使用、可安装到主屏幕。</p>" +
-        (deferredPrompt ? '<button class="btn btn-block" data-act="install">安装应用</button>' : "") +
-        '<p class="note">iPhone / iPad：Safari 打开 → 分享 → 添加到主屏幕。安卓 / 桌面 Chrome、Edge：地址栏“安装”图标。</p>') +
+        (deferredPrompt ? '<button class="btn btn-cta btn-block" data-act="install">安装应用</button>' : "") +
+        '<p class="note">iPhone / iPad：Safari 打开 → 分享 → 添加到主屏幕。安卓 / 桌面 Chrome、Edge：地址栏「安装」图标。</p>') +
       card('<h3>重要声明</h3><ol class="qlist">' + DATA.caveats.map(function (c) { return "<li>" + esc(c) + "</li>"; }).join("") + "</ol>");
   }
 
   /* ---------------- 顶栏 / 标签栏 / 渲染 ---------------- */
-  var TITLES = {
-    assess: "自我探索测评",
-    explore: "探索工具箱",
-    decide: "志愿决策",
-    more: "更多"
+  var TITLES = { compass: "罗盘 · 我是谁", chart: "航海图 · 去哪里", more: "更多" };
+  var SUB_TITLES = {
+    quiz: "兴趣测评", flow: "心流与成就", odyssey: "奥德赛计划", interview: "人物访谈",
+    parents: "家长专区", knowledge: "知识库", data: "数据管理", about: "关于与声明"
   };
-  var MORE_TITLES = { parents: "家长专区", knowledge: "知识库", data: "数据管理", about: "关于与声明" };
 
   function renderTopbar(r) {
     var el = $("#topbar");
-    if (r.page === "home") {
-      el.innerHTML = '<div class="topbar-in"><span class="brand">' + DATA.app.name + '</span><span class="brand-sub">' + DATA.app.title + "</span></div>";
+    var gear = '<a class="gear" href="#/more" aria-label="设置与更多">' + ICONS.gear + "</a>";
+    if (r.page === "now") {
+      el.innerHTML = '<div class="topbar-in"><span class="brand">' + DATA.app.name + '</span><span class="brand-sub">' + DATA.app.title + "</span>" + gear + "</div>";
       return;
     }
     var title = TITLES[r.page] || "";
     var back = "";
-    if (r.page === "more" && r.sub && MORE_TITLES[r.sub]) {
-      title = MORE_TITLES[r.sub];
-      back = '<a class="back-btn" href="#/more" aria-label="返回">' + ICONS.back + "</a>";
+    if (r.page === "compass" && r.sub && SUB_TITLES[r.sub]) {
+      title = SUB_TITLES[r.sub];
+      back = '<a class="back-btn" href="#/compass" aria-label="返回罗盘">' + ICONS.back + "</a>";
+    } else if (r.page === "more") {
+      if (r.sub && SUB_TITLES[r.sub]) {
+        title = SUB_TITLES[r.sub];
+        back = '<a class="back-btn" href="#/more" aria-label="返回">' + ICONS.back + "</a>";
+      } else {
+        back = '<a class="back-btn" href="#/now" aria-label="返回此刻">' + ICONS.back + "</a>";
+      }
     }
-    el.innerHTML = '<div class="topbar-in">' + back + '<span class="page-title">' + title + "</span></div>";
+    var right = (r.page === "compass" || r.page === "chart") && !r.sub ? gear : (r.page === "chart" ? gear : "");
+    el.innerHTML = '<div class="topbar-in">' + back + '<span class="page-title">' + title + "</span>" + right + "</div>";
   }
 
   function renderTabbar(r) {
@@ -661,11 +885,17 @@
     renderTopbar(r);
     renderTabbar(r);
     var v = $("#view");
-    if (r.page === "assess") v.innerHTML = viewAssess();
-    else if (r.page === "explore") v.innerHTML = viewExplore(r.sub);
-    else if (r.page === "decide") v.innerHTML = viewDecide(r.sub);
+    if (r.page === "compass") {
+      if (r.sub === "quiz") v.innerHTML = viewQuiz();
+      else if (r.sub === "flow") v.innerHTML = viewFlowPage();
+      else if (r.sub === "odyssey") v.innerHTML = viewOdysseyPage();
+      else if (r.sub === "interview") v.innerHTML = viewInterviewPage();
+      else v.innerHTML = viewCompass();
+    }
+    else if (r.page === "chart") v.innerHTML = viewChart(r.sub);
     else if (r.page === "more") v.innerHTML = viewMore(r.sub);
-    else v.innerHTML = viewHome();
+    else v.innerHTML = viewNow();
+    renderOnboarding();
     if (location.hash !== lastHash) {
       window.scrollTo(0, 0);
       lastHash = location.hash;
@@ -683,12 +913,54 @@
     if (!btn) return;
     var act = btn.dataset.act;
 
+    if (act === "noop") return;
+
     if (act === "acc") {
       var acc = btn.closest(".acc");
       if (acc) acc.classList.toggle("open");
       return;
     }
 
+    /* ---- 开场定向 ---- */
+    if (act === "ob-persona") { ob.persona = btn.dataset.v; ob.step = 1; renderOnboarding(); return; }
+    if (act === "ob-phase") { ob.phase = btn.dataset.v; ob.step = 2; renderOnboarding(); return; }
+    if (act === "ob-back") { ob.step = Math.max(0, ob.step - 1); renderOnboarding(); return; }
+    if (act === "ob-start") {
+      S.profile.persona = ob.persona;
+      S.profile.phase = ob.phase;
+      S.profile.onboarded = true;
+      saveNow();
+      renderOnboarding();
+      render();
+      toast("起点已校准，欢迎登船");
+      return;
+    }
+
+    /* ---- 身份 / 阶段 ---- */
+    if (act === "set-phase") {
+      if (S.profile.phase !== btn.dataset.v) {
+        S.profile.phase = btn.dataset.v;
+        saveNow(); rerenderKeep();
+        var st = null;
+        DATA.stages.forEach(function (s) { if (s.key === btn.dataset.v) st = s; });
+        toast("已切换到「" + (st ? st.name : "") + "」阶段");
+      }
+      return;
+    }
+    if (act === "set-persona") {
+      if (S.profile.persona !== btn.dataset.v) {
+        S.profile.persona = btn.dataset.v;
+        saveNow(); rerenderKeep();
+        toast(btn.dataset.v === "parent" ? "已切换为家长视角" : "已切换为考生视角");
+      }
+      return;
+    }
+
+    /* ---- 浮层 ---- */
+    if (act === "sheet-open") { openSheet(btn.dataset.sheet); return; }
+    if (act === "sheet-close") { closeSheet(); return; }
+
+    /* ---- 测评 ---- */
     if (act === "riasec-start" || act === "riasec-retake") {
       S.riasec.answers = {};
       S.riasec.idx = 0;
@@ -725,6 +997,7 @@
       return;
     }
 
+    /* ---- 心流 / 成就 ---- */
     if (act === "flow-add") {
       var activity = $("#flow-activity").value.trim();
       if (!activity) { toast("请先填写活动名称"); return; }
@@ -736,7 +1009,7 @@
         note: $("#flow-note").value.trim(),
         created: Date.now()
       });
-      saveNow(); rerenderKeep(); toast("已记录一条心流线索");
+      saveNow(); closeSheet(); rerenderKeep(); toast("已存进罗盘");
       return;
     }
     if (act === "flow-del") {
@@ -745,7 +1018,6 @@
       saveNow(); rerenderKeep();
       return;
     }
-
     if (act === "ach-add") {
       var ev = $("#ach-event").value.trim();
       if (!ev) { toast("请先填写成就事件"); return; }
@@ -755,7 +1027,7 @@
         pattern: $("#ach-pattern").value.trim(),
         created: Date.now()
       });
-      saveNow(); rerenderKeep(); toast("已添加成就事件");
+      saveNow(); closeSheet(); rerenderKeep(); toast("已存进罗盘");
       return;
     }
     if (act === "ach-del") {
@@ -765,6 +1037,7 @@
       return;
     }
 
+    /* ---- 访谈 ---- */
     if (act === "iv-add") {
       var person = $("#iv-person").value.trim();
       if (!person) { toast("请先填写对方称呼"); return; }
@@ -776,7 +1049,7 @@
         answers: {}, gain: "",
         created: Date.now()
       });
-      saveNow(); rerenderKeep(); toast("已添加访谈对象");
+      saveNow(); closeSheet(); rerenderKeep(); toast("已添加访谈对象");
       return;
     }
     if (act === "iv-del") {
@@ -795,6 +1068,7 @@
       return;
     }
 
+    /* ---- 方向池 ---- */
     if (act === "cand-add") {
       var school = $("#cand-school").value.trim();
       if (!school) { toast("请先填写院校名称"); return; }
@@ -806,7 +1080,7 @@
         scores: { interest: 5, ability: 5, values: 5, career: 5, score: 5, city: 5 },
         note: "", created: Date.now()
       });
-      saveNow(); rerenderKeep(); toast("已添加候选方案");
+      saveNow(); closeSheet(); rerenderKeep(); toast("已放进方向池");
       return;
     }
     if (act === "cand-del") {
@@ -823,6 +1097,7 @@
       return;
     }
 
+    /* ---- 数据 / 安装 ---- */
     if (act === "export") {
       var blob = new Blob([Store.exportJson(S)], { type: "application/json" });
       var a = document.createElement("a");
@@ -854,7 +1129,7 @@
     }
   });
 
-  /* ---------------- 事件：change（勾选 / 导入 / 滑块定稿） ---------------- */
+  /* ---------------- 事件：change ---------------- */
   document.addEventListener("change", function (e) {
     var t = e.target;
 
@@ -881,27 +1156,21 @@
       return;
     }
 
-    // 权重 / 方案维度滑块松手后：保存并刷新排序
     if (t.dataset && (t.dataset.w || (t.dataset.cid && t.dataset.dim))) {
       saveNow(); rerenderKeep();
       return;
     }
-    if (t.dataset && t.dataset.od) {
-      saveNow();
-      return;
-    }
-    if (t.dataset && t.dataset.iid) {
+    if (t.dataset && (t.dataset.od || t.dataset.iid)) {
       saveNow();
       return;
     }
   });
 
-  /* ---------------- 事件：input（实时写入状态） ---------------- */
+  /* ---------------- 事件：input ---------------- */
   document.addEventListener("input", function (e) {
     var t = e.target;
     var d = t.dataset || {};
 
-    // 滑块的数值即时回显
     if (t.type === "range" && t.nextElementSibling && t.nextElementSibling.tagName === "OUTPUT") {
       t.nextElementSibling.textContent = t.value;
     }
@@ -962,7 +1231,7 @@
 
   /* ---------------- 启动 ---------------- */
   window.addEventListener("hashchange", render);
-  if (!location.hash) location.replace("#/home");
+  if (!location.hash) location.replace("#/now");
   render();
 
 })();

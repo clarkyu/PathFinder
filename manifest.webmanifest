@@ -20,13 +20,13 @@
     {
       "name": "霍兰德兴趣测评",
       "short_name": "测评",
-      "url": "./#/assess",
+      "url": "./#/compass/quiz",
       "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }]
     },
     {
-      "name": "决策平衡单",
+      "name": "航海图 · 决策",
       "short_name": "决策",
-      "url": "./#/decide",
+      "url": "./#/chart",
       "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }]
     }
   ]

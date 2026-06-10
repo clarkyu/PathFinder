@@ -12,8 +12,32 @@ var DATA = {
     tagline: "把出分前后的两个月，变成“低成本试错 + 系统自我认识”的窗口期。",
     quote: "一个人若是看不到未来，就掌握不了现在；一个人若是掌握不了现在，就看不到未来。",
     quoteBy: "金树人《生涯咨询与辅导》",
-    version: "1.0.0"
+    version: "2.0.0"
   },
+
+  /* ---------------- 开场定向 / 阶段 ---------------- */
+  onboarding: {
+    hello: "你好，欢迎登船。",
+    intro: "这里没有标准答案，只有一段一步一步走的航程。先回答两个问题，我来为你校准起点。",
+    personas: [
+      { key: "student", name: "我是考生", desc: "刚考完，想搞清楚自己的方向" },
+      { key: "parent", name: "我是家长", desc: "想帮孩子，又怕帮过了头" }
+    ],
+    phases: [
+      { key: "before", name: "还没出分", desc: "成绩公布前的窗口期" },
+      { key: "scored", name: "已经出分", desc: "正在定位、准备填志愿" },
+      { key: "after", name: "已填报 / 已录取", desc: "准备开启大学生活" }
+    ],
+    welcome: {
+      student: "迷茫很正常——探索“我是谁”本来就是 18 岁的发展任务，不是落后。接下来，一次只做一件事。",
+      parent: "你最重要的角色不是替孩子决定，而是陪他探索：提供信息、链接资源、接住情绪，把决定权交还给他。"
+    }
+  },
+  stages: [
+    { key: "before", name: "认识自己", sub: "出分前" },
+    { key: "scored", name: "检验与决策", sub: "出分后" },
+    { key: "after", name: "启航", sub: "录取后" }
+  ],
 
   /* ---------------- 霍兰德 RIASEC 兴趣探索（简版自评） ---------------- */
   riasec: {
@@ -229,10 +253,10 @@ var DATA = {
     {
       id: "p1", name: "阶段一 · 出分前", period: "现在 → 出分", goal: "自我认识 + 信息搜集",
       items: [
-        { id: "p1-1", text: "完成三个免费测评：VIA、阳光志愿四维测评、霍兰德 RIASEC", hint: "约 2 小时，结果当“聊天素材”而非定论", link: "#/assess" },
-        { id: "p1-2", text: "用一个晚上完成“奥德赛计划”三版本人生", hint: "全家平和讨论，家长只问不评判", link: "#/explore/odyssey" },
-        { id: "p1-3", text: "列出过去三年的“心流时刻”清单", hint: "最可靠的天赋线索", link: "#/explore/flow" },
-        { id: "p1-4", text: "列出 5–8 个隐约感兴趣的专业 / 职业并搜集资料", hint: "学什么、就业去向、对选科的要求", link: "#/decide" }
+        { id: "p1-1", text: "完成三个免费测评：VIA、阳光志愿四维测评、霍兰德 RIASEC", hint: "约 2 小时，结果当“聊天素材”而非定论", link: "#/compass/quiz" },
+        { id: "p1-2", text: "用一个晚上完成“奥德赛计划”三版本人生", hint: "全家平和讨论，家长只问不评判", link: "#/compass/odyssey" },
+        { id: "p1-3", text: "列出过去三年的“心流时刻”清单", hint: "最可靠的天赋线索", link: "#/compass/flow" },
+        { id: "p1-4", text: "列出 5–8 个隐约感兴趣的专业 / 职业并搜集资料", hint: "学什么、就业去向、对选科的要求", link: "#/chart" }
       ]
     },
     {
@@ -240,8 +264,8 @@ var DATA = {
       items: [
         { id: "p2-1", text: "用“位次”而非绝对分定位", hint: "新高考赋分制下排名更可靠" },
         { id: "p2-2", text: "用“阳光志愿”系统生成冲稳保梯度", hint: "官方免费，依托真实招录与就业数据", link: "https://gaokao.chsi.com.cn/zyck/", ext: true },
-        { id: "p2-3", text: "安排 2–3 次生涯人物访谈", hint: "在亲友、校友中找目标行业的人", link: "#/explore/interview" },
-        { id: "p2-4", text: "完成生涯决策平衡单，并请高中老师把关", hint: "六维加权打分，让权衡透明化", link: "#/decide" }
+        { id: "p2-3", text: "安排 2–3 次生涯人物访谈", hint: "在亲友、校友中找目标行业的人", link: "#/compass/interview" },
+        { id: "p2-4", text: "完成生涯决策平衡单，并请高中老师把关", hint: "六维加权打分，让权衡透明化", link: "#/chart" }
       ]
     },
     {

@@ -1,7 +1,7 @@
 /* 航向 PathFinder · Service Worker：应用壳缓存优先，支持完全离线 */
 "use strict";
 
-var CACHE = "pathfinder-v1.0.0";
+var CACHE = "pathfinder-v2.0.0";
 var ASSETS = [
   "./",
   "./index.html",
