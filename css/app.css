@@ -31,6 +31,7 @@
   --teal: #19A7CE;
   --cta: #FF7355;
   --cta-deep: #F25C3D;
+  --cta-ink: #B93A1B;       /* 珊瑚色系文字（浅底上 ≥4.5:1） */
 
   /* 语义强调（文字 / 浅底，随主题变） */
   --accent: #1450A3;
@@ -70,6 +71,7 @@
     --ph: #5C6E80;
 
     --accent: #8FB9F2;
+    --cta-ink: #FF9B82;
     --accent-soft: rgba(143, 185, 242, 0.14);
     --teal-soft: rgba(25, 167, 206, 0.16);
     --cta-soft: rgba(255, 115, 85, 0.18);
@@ -243,11 +245,8 @@ body.sheet-open { overflow: hidden; }  /* 浮层打开时锁定背景滚动 */
 .next-hero { padding: 20px 18px; }
 .nh-tag {
   display: inline-block; font-size: 11.5px; font-weight: 800; letter-spacing: 0.5px;
-  color: var(--cta-deep); background: var(--cta-soft);
+  color: var(--cta-ink); background: var(--cta-soft);
   border-radius: 99px; padding: 3px 11px; margin-bottom: 10px;
-}
-@media (prefers-color-scheme: dark) {
-  .nh-tag { color: #FF9B82; }
 }
 .next-hero h2 { font-size: 22px; line-height: 1.35; }
 .next-hero p { color: var(--muted); font-size: 14px; margin-top: 7px; }
@@ -269,7 +268,8 @@ body.sheet-open { overflow: hidden; }  /* 浮层打开时锁定背景滚动 */
   text-align: center;
 }
 .btn:active { transform: scale(0.98); opacity: 0.92; }
-.btn-cta { background: var(--cta); box-shadow: 0 6px 16px rgba(255, 115, 85, 0.32); }
+/* 深色文字在珊瑚底上对比度 ≈5.5:1（白字仅 2.7:1，不达 AA） */
+.btn-cta { background: var(--cta); color: #16263B; box-shadow: 0 6px 16px rgba(255, 115, 85, 0.32); }
 .btn-cta:active { background: var(--cta-deep); }
 .btn-block { display: flex; width: 100%; margin-top: 12px; }
 .btn-ghost { background: var(--accent-soft); color: var(--accent); box-shadow: none; }
@@ -389,9 +389,10 @@ select.input {
 .chip-pick { color: var(--muted); background: var(--soft); border: 1.5px solid transparent; }
 .chip-pick.on { color: #fff; background: var(--tc); }
 .chip-status { color: #fff; }
-.st-plan { background: #9AA8B5; }
-.st-booked { background: var(--warn); }
-.st-done { background: var(--good); }
+/* 状态/档位实底 chip 统一用深色变体，白字对比度 ≥4.5:1 */
+.st-plan { background: #64748B; }
+.st-booked { background: #B45309; }
+.st-done { background: #047857; }
 .badge { font-size: 11px; font-weight: 700; border-radius: 99px; padding: 2px 9px; white-space: nowrap; }
 .badge-good { color: var(--good); background: rgba(22, 163, 74, 0.12); }
 .badge-caution { color: var(--warn); background: rgba(217, 119, 6, 0.14); }
@@ -591,6 +592,21 @@ select.input {
 .ob-opt small { display: block; color: var(--muted); font-size: 12.5px; margin-top: 2px; }
 .ob-opt:active { transform: scale(0.98); border-color: var(--teal); }
 .ob-back { color: var(--muted); font-size: 13px; font-weight: 600; margin-bottom: 8px; }
+
+/* ---------------- 新版本提示条 ---------------- */
+.update-bar {
+  position: fixed; left: 50%; transform: translateX(-50%);
+  bottom: calc(var(--tabbar-h) + 14px + env(safe-area-inset-bottom));
+  z-index: 45;
+  display: flex; align-items: center; gap: 12px;
+  background: var(--navy); color: #fff;
+  font-size: 13.5px; font-weight: 600;
+  border-radius: 99px; padding: 8px 10px 8px 18px;
+  box-shadow: 0 10px 28px rgba(10, 30, 60, 0.35);
+  animation: slideUp 0.3s ease;
+  max-width: 92vw;
+}
+.update-bar .btn { background: #fff; color: var(--navy); padding: 7px 14px; border-radius: 99px; }
 
 /* ---------------- Toast ---------------- */
 .toast {

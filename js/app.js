@@ -173,6 +173,153 @@
       dots + labels + "</svg>";
   }
 
+  /* ---------------- 分享图（Canvas 生成 PNG） ---------------- */
+  function roundRect(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.arcTo(x + w, y, x + w, y + h, r);
+    ctx.arcTo(x + w, y + h, x, y + h, r);
+    ctx.arcTo(x, y + h, x, y, r);
+    ctx.arcTo(x, y, x + w, y, r);
+    ctx.closePath();
+  }
+  function downloadBlob(blob, name) {
+    var a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = name;
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+  }
+  function shareResult() {
+    var h = S.riasec.history[0];
+    if (!h) return;
+    var cv = document.createElement("canvas");
+    cv.width = 1080; cv.height = 1500;
+    var ctx = null;
+    try { ctx = cv.getContext("2d"); } catch (e) { ctx = null; }
+    if (!ctx) { toast("当前浏览器不支持生成图片"); return; }
+
+    var FONT = "'PingFang SC','Microsoft YaHei',sans-serif";
+    var order = DATA.riasec.hexOrder;
+    var max = DATA.riasec.maxPerType;
+    var sorted = sortTypes(h.scores);
+    var top = sorted.slice(0, 3);
+
+    // 背景与卡片
+    var g = ctx.createLinearGradient(0, 0, 1080, 1500);
+    g.addColorStop(0, "#1450A3");
+    g.addColorStop(1, "#19A7CE");
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, 1080, 1500);
+    ctx.fillStyle = "#FFFFFF";
+    roundRect(ctx, 60, 160, 960, 1180, 44);
+    ctx.fill();
+
+    // 标题
+    ctx.textAlign = "center";
+    ctx.fillStyle = "#FFFFFF";
+    ctx.font = "700 54px " + FONT;
+    ctx.fillText("我的霍兰德兴趣画像", 540, 112);
+
+    // 三字码
+    ctx.font = "800 130px " + FONT;
+    top.forEach(function (t, i) {
+      ctx.fillStyle = DATA.riasec.types[t].color;
+      ctx.fillText(t, 540 + (i - 1) * 150, 330);
+    });
+    ctx.fillStyle = "#6E7D8D";
+    ctx.font = "400 34px " + FONT;
+    ctx.fillText(top.map(function (t) { return DATA.riasec.types[t].name; }).join(" · "), 540, 392);
+
+    // 雷达图
+    var cx = 540, cy = 700, R = 215;
+    function pt(i, r) {
+      var ang = (-90 + i * 60) * Math.PI / 180;
+      return [cx + r * Math.cos(ang), cy + r * Math.sin(ang)];
+    }
+    function tracePoly(r) {
+      order.forEach(function (_, i) {
+        var p = pt(i, r);
+        if (i === 0) ctx.moveTo(p[0], p[1]); else ctx.lineTo(p[0], p[1]);
+      });
+      ctx.closePath();
+    }
+    ctx.strokeStyle = "#D8DCD2";
+    ctx.lineWidth = 2;
+    [0.25, 0.5, 0.75, 1].forEach(function (k) {
+      ctx.beginPath(); tracePoly(R * k); ctx.stroke();
+    });
+    order.forEach(function (_, i) {
+      var p = pt(i, R);
+      ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(p[0], p[1]); ctx.stroke();
+    });
+    ctx.beginPath();
+    order.forEach(function (t, i) {
+      var p = pt(i, (h.scores[t] / max) * R);
+      if (i === 0) ctx.moveTo(p[0], p[1]); else ctx.lineTo(p[0], p[1]);
+    });
+    ctx.closePath();
+    ctx.fillStyle = "rgba(20,80,163,0.16)";
+    ctx.fill();
+    ctx.strokeStyle = "#1450A3";
+    ctx.lineWidth = 5;
+    ctx.stroke();
+    ctx.font = "600 30px " + FONT;
+    order.forEach(function (t, i) {
+      var p = pt(i, R + 52);
+      ctx.fillStyle = DATA.riasec.types[t].color;
+      ctx.fillText(t + " " + DATA.riasec.types[t].name, p[0], p[1] + 10);
+    });
+
+    // 六型条形
+    var by = 1030, rowH = 49;
+    sorted.forEach(function (t, i) {
+      var info = DATA.riasec.types[t];
+      var y = by + i * rowH;
+      ctx.fillStyle = info.color;
+      roundRect(ctx, 150, y, 40, 40, 10); ctx.fill();
+      ctx.fillStyle = "#FFFFFF";
+      ctx.font = "800 26px " + FONT;
+      ctx.fillText(t, 170, y + 29);
+      ctx.textAlign = "left";
+      ctx.fillStyle = "#17293E";
+      ctx.font = "600 26px " + FONT;
+      ctx.fillText(info.name, 212, y + 29);
+      ctx.fillStyle = "#ECEEE7";
+      roundRect(ctx, 350, y + 11, 470, 18, 9); ctx.fill();
+      ctx.fillStyle = info.color;
+      roundRect(ctx, 350, y + 11, Math.max(18, 470 * h.scores[t] / max), 18, 9); ctx.fill();
+      ctx.fillStyle = "#6E7D8D";
+      ctx.font = "400 24px " + FONT;
+      ctx.fillText(h.scores[t] + "/" + max, 845, y + 29);
+      ctx.textAlign = "center";
+    });
+
+    // 页脚
+    ctx.fillStyle = "rgba(255,255,255,0.95)";
+    ctx.font = "700 34px " + FONT;
+    ctx.fillText(DATA.app.name + " · " + DATA.app.title, 540, 1408);
+    ctx.fillStyle = "rgba(255,255,255,0.8)";
+    ctx.font = "400 24px " + FONT;
+    ctx.fillText(fmtDate(h.date) + " · 兴趣画像是探索的草稿，不是判决书", 540, 1456);
+
+    var fileName = "pathfinder-" + h.code + "-" + fmtDate(h.date) + ".png";
+    cv.toBlob(function (blob) {
+      if (!blob) { toast("生成图片失败"); return; }
+      try {
+        var file = new File([blob], fileName, { type: "image/png" });
+        if (navigator.canShare && navigator.canShare({ files: [file] })) {
+          navigator.share({ files: [file], title: "我的霍兰德兴趣画像" })
+            .catch(function () { downloadBlob(blob, fileName); });
+          return;
+        }
+      } catch (e) { /* 回退到下载 */ }
+      downloadBlob(blob, fileName);
+      toast("分享图已保存");
+    }, "image/png");
+  }
+
   /* ---------------- 决策计算 ---------------- */
   function candidateScore(c) {
     var w = S.decision.weights, sumW = 0, raw = 0;
@@ -295,6 +442,7 @@
         '<input class="input" id="cand-major" maxlength="30" placeholder="专业 / 专业组（建议填写）">' +
         '<div class="row2"><input class="input" id="cand-city" maxlength="20" placeholder="城市（选填）">' +
         '<select class="input" id="cand-tier">' + tierOpts + "</select></div>" +
+        '<input class="input" id="cand-rank" type="number" min="1" inputmode="numeric" placeholder="往年最低位次（选填，供位次定位用）">' +
         '<button class="btn btn-cta btn-block" data-act="cand-add">放进方向池</button>');
     }
   };
@@ -616,6 +764,7 @@
         '<p class="note">' + esc(DATA.riasec.note) + "</p>", "result-card");
       html += card("<h3>前三型解读</h3>" + typeCards +
         '<div class="btn-row"><a class="btn btn-cta" href="#/chart">把感兴趣的方向加进决策</a>' +
+        '<button class="btn btn-ghost" data-act="riasec-share">生成分享图</button>' +
         '<button class="btn btn-ghost" data-act="riasec-retake">重新测评</button></div>' + histList);
     } else {
       html += card("<h3>霍兰德兴趣探索</h3><p>" + esc(DATA.riasec.intro) + "</p>" +
@@ -722,13 +871,56 @@
   function chartSeg(active) {
     return '<div class="seg">' +
       '<a class="seg-btn' + (active === "pool" ? " active" : "") + '" href="#/chart">方向池与打分</a>' +
-      '<a class="seg-btn' + (active === "tier" ? " active" : "") + '" href="#/chart/tier">冲稳保梯度</a>' +
+      '<a class="seg-btn' + (active === "tier" ? " active" : "") + '" href="#/chart/tier">冲稳保</a>' +
+      '<a class="seg-btn' + (active === "rank" ? " active" : "") + '" href="#/chart/rank">位次定位</a>' +
       "</div>";
   }
 
   function viewChart(sub) {
     if (sub === "tier") return chartSeg("tier") + viewTier();
+    if (sub === "rank") return chartSeg("rank") + viewRank();
     return chartSeg("pool") + viewPool();
+  }
+
+  /* ---------------- 视图：位次定位 ---------------- */
+  function viewRank() {
+    var rk = S.decision.rank;
+    var html = card("<h3>位次定位</h3><p>" + esc(DATA.rank.intro) + "</p>" +
+      '<div class="row2">' +
+      '<input class="input" type="number" min="1" inputmode="numeric" value="' + (rk.mine || "") + '" data-rank="mine" placeholder="我的全省位次（必填）">' +
+      '<input class="input" type="number" min="1" inputmode="numeric" value="' + (rk.total || "") + '" data-rank="total" placeholder="全省考生数（选填）">' +
+      "</div>" +
+      (rk.mine && rk.total && rk.total >= rk.mine
+        ? '<p class="note">你大约位于全省前 ' + (rk.mine / rk.total * 100).toFixed(1) + "%。</p>"
+        : '<p class="note">位次查本省考试院的「一分一段表」。</p>'));
+
+    var targets = S.decision.candidates.filter(function (c) { return c.pastRank > 0; });
+    if (!rk.mine) {
+      html += empty("先填写你的位次，再给方向池里的目标补上「往年最低位次」，这里会给出冲稳保参考。");
+    } else if (!targets.length) {
+      html += empty("方向池里还没有目标填写「往年最低位次」。在方案卡片或添加方向时补上即可。");
+    } else {
+      html += card("<h3>对照参考</h3>" + targets.map(function (c) {
+        var r = c.pastRank / rk.mine;
+        var sug, warn = "";
+        if (r >= 1.2) sug = "safe";
+        else if (r >= 0.95) sug = "steady";
+        else if (r >= 0.8) sug = "rush";
+        else { sug = "rush"; warn = "，差距较大请谨慎"; }
+        var t = tierInfo(sug);
+        var diff = Math.round((r - 1) * 100);
+        return '<div class="rank-row"><div class="rank-main"><b>' + esc(c.school) + (c.major ? " · " + esc(c.major) : "") + "</b>" +
+          '<small class="item-meta">往年位次 ' + c.pastRank + "：" +
+          (diff >= 0 ? "比你靠后 " + diff + "%" : "比你靠前 " + (-diff) + "%") + esc(warn) + "</small></div>" +
+          '<span class="chip chip-tier" style="background:' + t.color + '">' + t.name + "</span>" +
+          (c.tier === sug ? "" : '<button class="chip chip-pick" style="--tc:' + t.color + '" data-act="cand-tier" data-id="' + c.id + '" data-tier="' + sug + '">采纳</button>') +
+          "</div>";
+      }).join(""));
+    }
+
+    html += card('<h3>怎么用</h3><ol class="qlist">' + DATA.rank.tips.map(function (t) { return "<li>" + esc(t) + "</li>"; }).join("") + "</ol>" +
+      '<p class="note">' + esc(DATA.rank.disclaimer) + "</p>");
+    return html;
   }
 
   function viewPool() {
@@ -769,6 +961,7 @@
           '<div class="cand-side"><span class="cand-total" id="cand-total-' + c.id + '">' + candidateScore(c) + "</span>" +
           '<button class="icon-btn" data-act="cand-del" data-id="' + c.id + '" aria-label="删除">' + ICONS.trash + "</button></div></div>" +
           '<div class="chips">' + tierChips + "</div>" + dims +
+          '<input class="input" type="number" min="1" inputmode="numeric" value="' + (c.pastRank || "") + '" data-cid="' + c.id + '" data-field="pastRank" placeholder="往年最低位次（选填，供位次定位用）">' +
           '<textarea class="input" rows="2" data-cid="' + c.id + '" data-field="note" placeholder="备注 / SWOT：优势、劣势、机会、风险（选填）">' + esc(c.note || "") + "</textarea>", "item-card");
       }).join("");
     } else {
@@ -805,16 +998,49 @@
     return html;
   }
 
+  /* ---------------- 视图：选科参考 ---------------- */
+  function viewSubjects() {
+    var sel = S.subjects;
+    var chipsHtml = DATA.subjects.list.map(function (s) {
+      var on = sel.indexOf(s) >= 0;
+      return '<button class="chip chip-pick' + (on ? " on" : "") + '" style="--tc:#1450A3" data-act="subj-toggle" data-v="' + s + '">' + s + "</button>";
+    }).join("");
+    var html = card("<h3>选科组合参考</h3><p>" + esc(DATA.subjects.intro) + "</p>" +
+      '<p class="lbl">选出 3 科（' + sel.length + "/3）</p>" +
+      '<div class="chips">' + chipsHtml + "</div>");
+
+    if (sel.length === 3) {
+      var hasP = sel.indexOf("物理") >= 0, hasC = sel.indexOf("化学") >= 0, hasB = sel.indexOf("生物") >= 0;
+      var v;
+      if (hasP && hasC) v = DATA.subjects.verdicts.pc;
+      else if (hasP) v = DATA.subjects.verdicts.p;
+      else if (hasC) v = DATA.subjects.verdicts.c;
+      else if (!hasB) v = DATA.subjects.verdicts.lib;
+      else v = DATA.subjects.verdicts.other;
+      html += card('<span class="nh-tag">' + sel.join(" + ") + "</span><h2>" + esc(v.title) + "</h2><p>" + esc(v.desc) + "</p>" +
+        '<p class="lbl">大致适配方向</p><div class="chips">' +
+        v.dirs.map(function (d) { return '<span class="chip">' + esc(d) + "</span>"; }).join("") + "</div>", "next-hero");
+    } else {
+      html += empty("选满 3 科后给出参考结论。");
+    }
+
+    html += card('<p class="note">' + esc(DATA.subjects.disclaimer) + "</p>" +
+      '<a class="btn btn-block" href="https://gaokao.chsi.com.cn/zyck/" target="_blank" rel="noopener">在「阳光志愿」查询选科要求 ' + ICONS.ext + "</a>");
+    return html;
+  }
+
   /* ---------------- 视图：更多 ---------------- */
   function viewMore(sub) {
     if (sub === "parents") return viewParents();
     if (sub === "knowledge") return viewKnowledge();
+    if (sub === "subjects") return viewSubjects();
     if (sub === "data") return viewData();
     if (sub === "about") return viewAbout();
 
     var items = [
       { to: "#/more/parents", name: "家长专区", desc: "自主支持，而非包办" },
       { to: "#/more/knowledge", name: "知识库", desc: "22 张理论卡片，按需取用" },
+      { to: "#/more/subjects", name: "选科参考", desc: "给学弟学妹：3 科怎么选" },
       { to: "#/more/data", name: "数据管理", desc: "导出 / 导入 / 清空本机数据" },
       { to: "#/more/about", name: "关于与声明", desc: "版本 · 依据 · 局限" }
     ];
@@ -894,7 +1120,7 @@
   /* ---------------- 顶栏 / 标签栏 / 渲染 ---------------- */
   var TITLES = { compass: "探索 · 我是谁", chart: "决策 · 去哪里", more: "更多" };
   var COMPASS_SUBS = { quiz: "兴趣测评", flow: "心流与成就", odyssey: "奥德赛计划", interview: "人物访谈" };
-  var MORE_SUBS = { parents: "家长专区", knowledge: "知识库", data: "数据管理", about: "关于与声明" };
+  var MORE_SUBS = { parents: "家长专区", knowledge: "知识库", subjects: "选科参考", data: "数据管理", about: "关于与声明" };
 
   function renderTopbar(r) {
     var el = $("#topbar");
@@ -1036,6 +1262,21 @@
       return;
     }
 
+    /* ---- 选科参考 ---- */
+    if (act === "subj-toggle") {
+      var sv = btn.dataset.v;
+      var si = S.subjects.indexOf(sv);
+      if (si >= 0) S.subjects.splice(si, 1);
+      else if (S.subjects.length >= 3) { toast("最多选 3 科，先取消一科"); return; }
+      else S.subjects.push(sv);
+      saveNow(); rerenderKeep();
+      return;
+    }
+
+    /* ---- 分享 / 更新 ---- */
+    if (act === "riasec-share") { shareResult(); return; }
+    if (act === "reload-app") { location.reload(); return; }
+
     /* ---- 浮层 ---- */
     if (act === "sheet-open") { openSheet(btn.dataset.sheet, btn); return; }
     if (act === "sheet-close") { closeSheet(); return; }
@@ -1161,6 +1402,7 @@
         major: $("#cand-major").value.trim(),
         city: $("#cand-city").value.trim(),
         tier: $("#cand-tier").value,
+        pastRank: Math.max(0, Math.floor(Number($("#cand-rank").value) || 0)),
         scores: { interest: 5, ability: 5, values: 5, career: 5, score: 5, city: 5 },
         note: "", created: Date.now()
       });
@@ -1241,7 +1483,8 @@
       return;
     }
 
-    if (t.dataset && (t.dataset.w || (t.dataset.cid && t.dataset.dim))) {
+    if (t.dataset && (t.dataset.w || t.dataset.rank ||
+        (t.dataset.cid && (t.dataset.dim || t.dataset.field === "pastRank")))) {
       saveNow(); rerenderKeep();
       return;
     }
@@ -1278,6 +1521,18 @@
     }
     if (d.cid && d.field === "note") {
       S.decision.candidates.forEach(function (c) { if (c.id === d.cid) c.note = t.value; });
+      saveSoon();
+      return;
+    }
+    if (d.cid && d.field === "pastRank") {
+      S.decision.candidates.forEach(function (c) {
+        if (c.id === d.cid) c.pastRank = Math.max(0, Math.floor(Number(t.value) || 0));
+      });
+      saveSoon();
+      return;
+    }
+    if (d.rank) {
+      S.decision.rank[d.rank] = Math.max(0, Math.floor(Number(t.value) || 0));
       saveSoon();
       return;
     }
@@ -1327,6 +1582,18 @@
     deferredPrompt = null;
     toast("已安装到主屏幕");
     if (route().page === "more") rerenderKeep();
+  });
+
+  /* ---------------- 新版本提示 ---------------- */
+  window.addEventListener("pf-sw-updated", function () {
+    if ($("#update-bar")) return;
+    var bar = document.createElement("div");
+    bar.id = "update-bar";
+    bar.className = "update-bar";
+    bar.setAttribute("role", "status");
+    bar.innerHTML = "<span>应用已更新到新版本</span>" +
+      '<button class="btn btn-sm" data-act="reload-app">立即刷新</button>';
+    document.body.appendChild(bar);
   });
 
   /* ---------------- 多标签页同步 ---------------- */

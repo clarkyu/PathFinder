@@ -40,6 +40,12 @@
   <script src="js/app.js" defer></script>
   <script>
     if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) {
+      // 已有控制器说明不是首次安装——之后 controller 变更即代表新版本已接管
+      var pfHadSW = !!navigator.serviceWorker.controller;
+      navigator.serviceWorker.addEventListener('controllerchange', function () {
+        if (pfHadSW) window.dispatchEvent(new Event('pf-sw-updated'));
+        pfHadSW = true;
+      });
       window.addEventListener('load', function () {
         navigator.serviceWorker.register('sw.js').catch(function (e) {
           console.warn('SW register failed:', e);

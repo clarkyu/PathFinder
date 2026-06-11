@@ -44,8 +44,10 @@ var Store = (function () {
       interviews: [],
       decision: {
         weights: { interest: 3, ability: 3, values: 3, career: 3, score: 3, city: 3 },
+        rank: { mine: 0, total: 0 },
         candidates: []
-      }
+      },
+      subjects: []
     };
   }
 
@@ -168,8 +170,13 @@ var Store = (function () {
     var d = s.decision || {};
     var weights = {};
     DIMS.forEach(function (k) { weights[k] = num((d.weights || {})[k], 1, 5, 3); });
+    var rk = d.rank || {};
     s.decision = {
       weights: weights,
+      rank: {
+        mine: Math.floor(num(rk.mine, 0, 9999999, 0)),
+        total: Math.floor(num(rk.total, 0, 99999999, 0))
+      },
       candidates: arr(d.candidates).map(function (c) {
         c = c || {};
         var scores = {};
@@ -180,12 +187,21 @@ var Store = (function () {
           major: str(c.major, 30),
           city: str(c.city, 20),
           tier: pick(c.tier, TIERS, "unset"),
+          pastRank: Math.floor(num(c.pastRank, 0, 9999999, 0)),
           scores: scores,
           note: str(c.note, 1000),
           created: num(c.created, 0, 4102444800000, Date.now())
         };
       }).filter(function (c) { return c.school; })
     };
+
+    var SUBJECTS = ["物理", "化学", "生物", "政治", "历史", "地理"];
+    var seen = {};
+    s.subjects = arr(s.subjects).filter(function (x) {
+      if (SUBJECTS.indexOf(x) < 0 || seen[x]) return false;
+      seen[x] = true;
+      return true;
+    }).slice(0, 3);
 
     s.version = 1;
     s.createdAt = num(s.createdAt, 0, 4102444800000, Date.now());
