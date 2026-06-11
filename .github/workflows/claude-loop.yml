@@ -1,0 +1,145 @@
+# 循环工程：用户反馈 → Claude 自动分诊 / 实现 → PR → 人工合并 → 部署 → 回访
+# 完整规则与红线见 docs/loop.md。
+# 启用前提：仓库 Settings → Secrets 添加 ANTHROPIC_API_KEY。
+name: Claude Loop
+
+on:
+  issues:
+    types: [opened, labeled]
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+  id-token: write
+  actions: read
+
+jobs:
+  # ── 阶段一：自动分诊（任何 feedback issue 创建时） ───────────────
+  triage:
+    if: >
+      github.event_name == 'issues' &&
+      github.event.action == 'opened' &&
+      contains(join(github.event.issue.labels.*.name, ','), 'feedback')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check API key
+        id: key
+        run: |
+          if [ -n "${{ secrets.ANTHROPIC_API_KEY }}" ]; then
+            echo "has=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::warning::未配置 ANTHROPIC_API_KEY，跳过自动分诊（见 docs/loop.md §7）"
+            echo "has=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/checkout@v4
+        if: steps.key.outputs.has == 'true'
+
+      - uses: anthropics/claude-code-action@v1
+        if: steps.key.outputs.has == 'true'
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          claude_args: |
+            --allowedTools "Read,Grep,Glob,Bash(gh issue:*),Bash(gh search:*),Bash(gh label:*)"
+          prompt: |
+            你是 PathFinder 仓库循环工程的分诊员。请严格按 docs/loop.md 的「§3 分诊规则」处理
+            issue #${{ github.event.issue.number }}（只分诊，不改任何代码）：
+            1. 阅读 issue 与 docs/loop.md、docs/design.md，判断类型与优先级；
+            2. 用 `gh search issues` 判重，重复则评论指向原 issue 并加 label `duplicate`；
+            3. 加标签：type:bug / type:ux / type:feature / type:question 之一 + priority:p1|p2|p3；
+            4. 触碰红线（loop.md §5）或信息不足的，加 `needs-human` 并评论说明缺什么；
+            5. 用中文友好地回帖：复述你对问题的理解、给出处理建议与下一步
+              （等待维护者加 `loop:approved` 标签后将自动实现）。
+
+  # ── 阶段二：自动实现（维护者人工加 loop:approved 标签后） ────────
+  implement:
+    if: >
+      github.event_name == 'issues' &&
+      github.event.action == 'labeled' &&
+      github.event.label.name == 'loop:approved'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check API key
+        id: key
+        run: |
+          if [ -n "${{ secrets.ANTHROPIC_API_KEY }}" ]; then
+            echo "has=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::warning::未配置 ANTHROPIC_API_KEY，无法自动实现"
+            echo "has=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/checkout@v4
+        if: steps.key.outputs.has == 'true'
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        if: steps.key.outputs.has == 'true'
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+        if: steps.key.outputs.has == 'true'
+
+      - uses: anthropics/claude-code-action@v1
+        if: steps.key.outputs.has == 'true'
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          claude_args: |
+            --allowedTools "Read,Grep,Glob,Edit,Write,Bash(npm:*),Bash(node:*),Bash(git:*),Bash(gh:*)"
+          prompt: |
+            你是 PathFinder 仓库循环工程的实现者。维护者已批准 issue
+            #${{ github.event.issue.number }}，请严格按 docs/loop.md「§4 实现守则」执行：
+            1. 通读 issue 全部讨论与 docs/design.md 设计原则；
+            2. 从 main 创建分支 loop/issue-${{ github.event.issue.number }}；
+            3. 做最小必要修改；守住 loop.md §5 的全部红线，越线立即停手、
+               改加 needs-human 标签并评论说明；
+            4. 在 tests/smoke.mjs 中为本次修复/功能补充断言，运行 `npm test` 必须全绿；
+            5. 按 §4 规则同步 bump js/data.js 的 version 与 sw.js 的 CACHE；
+               在 docs/design.md 迭代记录追加一行；
+            6. 提交并推送分支，用 `gh pr create` 开 PR：标题
+               `fix|feat: 摘要 (#${{ github.event.issue.number }})`，
+               正文按 .github/pull_request_template.md 填写检查单；
+            7. 在 issue 下评论 PR 链接与改动摘要，等待维护者审阅合并。
+
+  # ── 对话通道：issue / PR 中 @claude 提及时响应 ──────────────────
+  mention:
+    if: >
+      github.event_name == 'issue_comment' &&
+      contains(github.event.comment.body, '@claude')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check API key
+        id: key
+        run: |
+          if [ -n "${{ secrets.ANTHROPIC_API_KEY }}" ]; then
+            echo "has=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/checkout@v4
+        if: steps.key.outputs.has == 'true'
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        if: steps.key.outputs.has == 'true'
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+        if: steps.key.outputs.has == 'true'
+
+      - uses: anthropics/claude-code-action@v1
+        if: steps.key.outputs.has == 'true'
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          claude_args: |
+            --allowedTools "Read,Grep,Glob,Edit,Write,Bash(npm:*),Bash(node:*),Bash(git:*),Bash(gh:*)"

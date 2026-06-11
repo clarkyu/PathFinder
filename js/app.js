@@ -183,6 +183,23 @@
     ctx.arcTo(x, y, x + w, y, r);
     ctx.closePath();
   }
+  function copyText(t) {
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(t);
+        return true;
+      }
+    } catch (e) { /* 走兜底 */ }
+    try {
+      var ta = document.createElement("textarea");
+      ta.value = t;
+      document.body.appendChild(ta);
+      ta.select();
+      var ok = document.execCommand && document.execCommand("copy");
+      ta.remove();
+      return !!ok;
+    } catch (e) { return false; }
+  }
   function downloadBlob(blob, name) {
     try {
       var a = document.createElement("a");
@@ -497,6 +514,15 @@
         '<select class="input" id="cand-tier">' + tierOpts + "</select></div>" +
         '<input class="input" id="cand-rank" type="number" min="1" inputmode="numeric" placeholder="往年最低位次（选填，供位次定位用）">' +
         '<button class="btn btn-cta btn-block" data-act="cand-add">放进方向池</button>');
+    },
+    fb: function () {
+      return sheetWrap("意见反馈",
+        "你的反馈会进入迭代循环：分诊 → 修复 → 上线后回访。只提交下面可见的内容，不会上传你的任何本地数据。",
+        '<select class="input" id="fb-cat"><option>问题报告</option><option>功能建议</option><option>使用疑问</option></select>' +
+        '<textarea class="input" id="fb-text" rows="4" maxlength="1000" placeholder="发生了什么？你期望是什么样？"></textarea>' +
+        '<button class="btn btn-cta btn-block" data-act="fb-github">提交到 GitHub（推荐）</button>' +
+        '<button class="btn btn-ghost btn-block" data-act="fb-copy">复制反馈内容（粘贴到微信 / 邮件）</button>' +
+        '<p class="note">GitHub 方式需要账号；复制方式适合没有账号的家长与同学，请粘贴后发给应用维护者。</p>');
     }
   };
   var sheetTrigger = null; // 打开浮层的按钮，关闭后焦点归还
@@ -1138,7 +1164,8 @@
     }
     html += card(items.map(function (it) {
       return '<a class="navrow" href="' + it.to + '"><div><b>' + it.name + "</b><small>" + it.desc + "</small></div>" + ICONS.chev + "</a>";
-    }).join(""));
+    }).join("") +
+      '<button class="navrow" data-act="sheet-open" data-sheet="fb"><span><b>意见反馈</b><small>问题、建议都欢迎——反馈会进入迭代循环</small></span>' + ICONS.chev + "</button>");
 
     html += card('<div class="id-row"><span class="lbl-inline">身份</span>' +
       '<button class="chip chip-pick' + (!isParent() ? " on" : "") + '" style="--tc:#1450A3" data-act="set-persona" data-v="student">考生</button>' +
@@ -1358,6 +1385,31 @@
       else if (S.subjects.length >= 3) { toast("最多选 3 科，先取消一科"); return; }
       else S.subjects.push(sv);
       saveNow(); rerenderKeep();
+      return;
+    }
+
+    /* ---- 意见反馈 ---- */
+    if (act === "fb-github" || act === "fb-copy") {
+      var fbTxt = $("#fb-text").value.trim();
+      if (!fbTxt) { toast("先写两句反馈吧"); return; }
+      var fbCat = $("#fb-cat").value;
+      var fbBody = "【类型】" + fbCat +
+        "\n【描述】\n" + fbTxt +
+        "\n\n【版本】v" + DATA.app.version +
+        "\n【环境】" + String(navigator.userAgent || "").slice(0, 90) +
+        "\n\n—— 来自应用内反馈";
+      if (act === "fb-github") {
+        var fbUrl = DATA.app.repo + "/issues/new?labels=feedback&title=" +
+          encodeURIComponent("【" + fbCat + "】" + fbTxt.slice(0, 30)) +
+          "&body=" + encodeURIComponent(fbBody);
+        var fw = null;
+        try { fw = window.open(fbUrl, "_blank"); } catch (e) { fw = null; }
+        if (!fw) { copyText(fbBody); toast("无法打开新窗口，反馈内容已复制"); return; }
+        closeSheet();
+      } else {
+        if (copyText(fbBody)) { toast("已复制，去粘贴给维护者吧"); closeSheet(); }
+        else toast("复制失败，请手动选择文字复制");
+      }
       return;
     }
 

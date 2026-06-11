@@ -1,0 +1,42 @@
+name: Tests
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install test deps (jsdom)
+        run: npm ci
+
+      - name: Run smoke suite
+        run: npm test
+
+      - name: Syntax check app scripts
+        run: |
+          node --check js/data.js
+          node --check js/store.js
+          node --check js/app.js
+          node --check sw.js
+          node -e "JSON.parse(require('fs').readFileSync('manifest.webmanifest','utf8'))"
+
+      - name: Version consistency (data.js ⇄ sw.js)
+        run: |
+          APP_V=$(grep -o 'version: "[0-9.]*"' js/data.js | grep -o '[0-9.]*')
+          SW_V=$(grep -o 'pathfinder-v[0-9.]*' sw.js | grep -o '[0-9.]*')
+          echo "app=$APP_V sw=$SW_V"
+          test "$APP_V" = "$SW_V" || { echo "::error::js/data.js version 与 sw.js CACHE 版本不一致"; exit 1; }

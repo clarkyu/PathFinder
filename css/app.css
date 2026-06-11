@@ -645,3 +645,4 @@ select.input {
   body { font-size: 15.5px; }
   .view { padding-left: 0; padding-right: 0; }
 }
+button.navrow { width: 100%; }
