@@ -184,12 +184,16 @@
     ctx.closePath();
   }
   function downloadBlob(blob, name) {
-    var a = document.createElement("a");
-    a.href = URL.createObjectURL(blob);
-    a.download = name;
-    document.body.appendChild(a);
-    a.click();
-    setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+    try {
+      var a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = name;
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+    } catch (e) {
+      toast("当前环境不支持下载文件");
+    }
   }
   function shareResult() {
     var h = S.riasec.history[0];
@@ -318,6 +322,55 @@
       downloadBlob(blob, fileName);
       toast("分享图已保存");
     }, "image/png");
+  }
+
+  /* ---------------- 打印版志愿表 ---------------- */
+  function exportPrint() {
+    var d = S.decision;
+    if (!d.candidates.length) { toast("方向池还是空的，先添加候选方案"); return; }
+    function rows(list) {
+      return list.map(function (c, i) {
+        return "<tr><td>" + (i + 1) + "</td><td>" + esc(c.school) + "</td><td>" + esc(c.major || "—") + "</td><td>" +
+          esc(c.city || "—") + "</td><td>" + (c.pastRank || "—") + "</td><td>" + candidateScore(c) + "</td><td>" +
+          esc(c.note || "") + "</td></tr>";
+      }).join("");
+    }
+    var secs = ["rush", "steady", "safe", "unset"].map(function (key) {
+      var t = tierInfo(key);
+      var list = d.candidates.filter(function (c) { return (c.tier || "unset") === key; });
+      if (!list.length) return "";
+      return "<h2><span style='background:" + t.color + "'>" + t.name + "</span>" + esc(t.hint) + "（" + list.length + "）</h2>" +
+        "<table><thead><tr><th>#</th><th>院校</th><th>专业 / 组</th><th>城市</th><th>往年位次</th><th>综合分</th><th>备注</th></tr></thead><tbody>" +
+        rows(list) + "</tbody></table>";
+    }).join("");
+    var weights = DATA.decision.dims.map(function (dm) { return dm.name + " " + d.weights[dm.key]; }).join(" · ");
+    var html = "<!DOCTYPE html><html lang='zh-CN'><head><meta charset='utf-8'>" +
+      "<title>志愿方案表 · " + DATA.app.name + "</title><style>" +
+      "body{font-family:'PingFang SC','Microsoft YaHei',sans-serif;color:#1A2433;margin:32px auto;max-width:860px;padding:0 16px}" +
+      "h1{font-size:22px;margin:0}h2{font-size:15px;margin:20px 0 8px}" +
+      "h2 span{color:#fff;border-radius:4px;padding:2px 9px;margin-right:8px;font-size:13px}" +
+      "table{width:100%;border-collapse:collapse;font-size:12.5px}" +
+      "th,td{border:1px solid #C9D2DC;padding:6px 8px;text-align:left;vertical-align:top}th{background:#F0F3F7}" +
+      ".meta{color:#667789;font-size:12.5px;margin:6px 0 14px}" +
+      ".foot{margin-top:24px;color:#667789;font-size:11.5px;border-top:1px solid #C9D2DC;padding-top:10px;line-height:1.7}" +
+      ".noprint{margin:14px 0}.noprint button{padding:9px 20px;font-size:14px;cursor:pointer}" +
+      "@media print{.noprint{display:none}body{margin:0;max-width:none}}" +
+      "</style></head><body>" +
+      "<h1>志愿方案表</h1>" +
+      "<p class='meta'>" + fmtDate(Date.now()) +
+      (d.rank.mine ? " · 我的位次 " + d.rank.mine : "") +
+      " · 平衡单权重：" + weights + "</p>" +
+      "<div class='noprint'><button onclick='window.print()'>打印 / 存为 PDF</button></div>" +
+      secs +
+      "<p class='foot'>由 " + DATA.app.name + "（" + DATA.app.title + "）生成。综合分为个人决策平衡单的加权结果，" +
+      "往年位次为手工录入，均仅供家庭讨论参考；正式填报请以教育部「阳光志愿」系统与学校老师意见为准。</p>" +
+      "</body></html>";
+    var w = null;
+    try { w = window.open("", "_blank"); } catch (e) { w = null; }
+    if (!w || !w.document) { toast("无法打开新窗口，请允许弹窗后重试"); return; }
+    w.document.open();
+    w.document.write(html);
+    w.document.close();
   }
 
   /* ---------------- 决策计算 ---------------- */
@@ -813,8 +866,40 @@
   }
 
   /* ---------------- 视图：奥德赛页 ---------------- */
+  function odysseyCompare() {
+    if (!odysseyTouched()) return "";
+    var vs = DATA.odyssey.versions;
+    var best = null, bestVal = -1;
+    ["a", "b", "c"].forEach(function (k) {
+      var od = S.odyssey[k];
+      if (od.title && od.title.trim() && od.gauges.like > bestVal) { bestVal = od.gauges.like; best = k; }
+    });
+    var head = '<div class="odc-row odc-head"><span class="odc-lbl"></span>' + vs.map(function (v) {
+      return '<span class="odc-cell odc-' + v.key + '">' + v.name.split(" · ")[1] + "</span>";
+    }).join("") + "</div>";
+    var titleRow = '<div class="odc-row"><span class="odc-lbl">六字标题</span>' + vs.map(function (v) {
+      var t = S.odyssey[v.key].title;
+      return '<span class="odc-cell">' + (t ? "<b>" + esc(t) + "</b>" : '<i class="odc-empty">未写</i>') + "</span>";
+    }).join("") + "</div>";
+    var gaugeRows = DATA.odyssey.gauges.map(function (g) {
+      return '<div class="odc-row"><span class="odc-lbl">' + g.name + "</span>" + vs.map(function (v) {
+        var val = S.odyssey[v.key].gauges[g.key];
+        return '<span class="odc-cell"><i class="odc-bar"><b style="width:' + val + '%"></b></i>' + val + "</span>";
+      }).join("") + "</div>";
+    }).join("");
+    var qRow = '<div class="odc-row"><span class="odc-lbl">待解问题</span>' + vs.map(function (v) {
+      var n = (S.odyssey[v.key].questions || "").split("\n").filter(function (x) { return x.trim(); }).length;
+      return '<span class="odc-cell">' + n + " 个</span>";
+    }).join("") + "</div>";
+    var insight = best
+      ? '<p class="note">此刻最让你心动的是「' + esc(S.odyssey[best].title) + "」（喜欢 " + bestVal + "）。和家人聊聊：它哪一点吸引你？哪些待解问题可以先去验证？</p>"
+      : "";
+    return card('<h3>三版对比</h3><div class="odc">' + head + titleRow + gaugeRows + qRow + "</div>" + insight);
+  }
+
   function viewOdysseyPage() {
     var html = card("<h3>奥德赛计划 · 三个五年</h3><p>" + esc(DATA.odyssey.intro) + '</p><p class="note">内容自动保存在本机。</p>');
+    html += odysseyCompare();
     html += DATA.odyssey.versions.map(function (v) {
       var od = S.odyssey[v.key];
       var years = od.years.map(function (y, i) {
@@ -994,6 +1079,7 @@
 
     html += card('<h3>填报提醒</h3><ol class="qlist">' + DATA.decision.tierTips.map(function (t) { return "<li>" + esc(t) + "</li>"; }).join("") + "</ol>" +
       '<p class="item-note">' + esc(DATA.decision.tradeoff) + "</p>" +
+      '<button class="btn btn-ghost btn-block" data-act="export-print">导出打印版志愿表（可存 PDF）</button>' +
       '<a class="btn btn-block" href="https://gaokao.chsi.com.cn/zyck/" target="_blank" rel="noopener">打开教育部「阳光志愿」系统 ' + ICONS.ext + "</a>");
     return html;
   }
@@ -1097,8 +1183,10 @@
   }
 
   function viewData() {
-    return card("<h3>导出备份</h3><p>把全部数据下载为 JSON 文件，换设备或重装浏览器前请先备份。</p>" +
-      '<button class="btn btn-block" data-act="export">导出数据（' + Store.sizeKb() + ' KB）</button>') +
+    return card("<h3>导出 / 互传备份</h3><p>把全部数据存为 JSON 文件。换设备、家长⇄考生两台手机互传，都靠它。</p>" +
+      '<button class="btn btn-block" data-act="export">导出数据（' + Store.sizeKb() + ' KB）</button>' +
+      '<button class="btn btn-ghost btn-block" data-act="share-backup">分享备份给另一台设备</button>' +
+      '<p class="note">互传流程：本机「分享备份」→ 通过微信 / AirDrop 等发给对方 → 对方在「导入备份」中选择该文件。</p>') +
       card("<h3>导入备份</h3><p>选择之前导出的 JSON 文件，将覆盖当前数据。</p>" +
         '<input type="file" id="import-file" accept="application/json,.json" hidden>' +
         '<button class="btn btn-ghost btn-block" data-act="import">选择文件导入</button>') +
@@ -1273,8 +1361,23 @@
       return;
     }
 
-    /* ---- 分享 / 更新 ---- */
+    /* ---- 分享 / 导出 / 更新 ---- */
     if (act === "riasec-share") { shareResult(); return; }
+    if (act === "export-print") { exportPrint(); return; }
+    if (act === "share-backup") {
+      var bblob = new Blob([Store.exportJson(S)], { type: "application/json" });
+      var bname = "pathfinder-backup-" + fmtDate(Date.now()) + ".json";
+      try {
+        var bfile = new File([bblob], bname, { type: "application/json" });
+        if (navigator.canShare && navigator.canShare({ files: [bfile] })) {
+          navigator.share({ files: [bfile], title: "PathFinder 数据备份" }).catch(function () { /* 用户取消 */ });
+          return;
+        }
+      } catch (e) { /* 回退到下载 */ }
+      downloadBlob(bblob, bname);
+      toast("当前环境不支持直接分享，已改为下载文件");
+      return;
+    }
     if (act === "reload-app") { location.reload(); return; }
 
     /* ---- 浮层 ---- */

@@ -6,7 +6,7 @@
  *   后台拉取新版本写入缓存，下次访问生效（部署后无需手动清缓存）。 */
 "use strict";
 
-var CACHE = "pathfinder-v2.3.0";
+var CACHE = "pathfinder-v2.4.0";
 var NAV_TIMEOUT_MS = 4000;
 var ASSETS = [
   "./",
