@@ -158,6 +158,9 @@ v2.0 把隐喻当成了路标，这是个错误——隐喻应该做氛围，不
   Claude 自动分诊 → 维护者加 loop:approved → Claude 在 loop/issue-N 分支
   实现并补测试 → 开 PR → 人工合并 → 部署后回访。两道人工闸门 + 六条红线
   写入 docs/loop.md，作为对自动化系统的"宪法约束"。
+- **引擎双通道**：管道可运行在 Claude（ANTHROPIC_API_KEY）或 DeepSeek V4
+  （DEEPSEEK_API_KEY，经官方 Anthropic 兼容端点）上——国内维护者用易得的
+  DeepSeek key 即可启用全套循环；模型按任务分级（分诊 flash / 实现 pro）。
 - 本版本自身即按新流程交付：走分支 + PR，不直推 main。
 
 ## 7. 明确的取舍

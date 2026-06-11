@@ -84,8 +84,17 @@ PR（评审）→ `main` 部署（发布）→ Issue 回帖（回访）→ desig
 
 ## §7 启用与运维
 
-1. **必需**：仓库 Settings → Secrets and variables → Actions →
-   新建 `ANTHROPIC_API_KEY`（未配置时工作流会安全跳过并提示）。
+1. **必需（AI 引擎，二选一）**：仓库 Settings → Secrets and variables → Actions →
+   - **国际通道**：新建 `ANTHROPIC_API_KEY`（Claude；两者都配置时默认优先）；
+   - **国内通道**：新建 `DEEPSEEK_API_KEY`（DeepSeek V4，2026-04 发布——经其官方
+     Anthropic 兼容端点 `https://api.deepseek.com/anthropic` 驱动同一套
+     claude-code-action：分诊用 `deepseek-v4-flash`，实现/对话用
+     `deepseek-v4-pro`，两者均为 1M 上下文）。
+   两把钥匙都没有时工作流会安全跳过并提示；都配置时可在 Variables 设
+   `LOOP_PROVIDER=deepseek` 强制走 DeepSeek。每次运行的日志会以
+   `::notice::循环引擎：…` 标明实际引擎。
+   注：DeepSeek 旧模型名 `deepseek-chat` / `deepseek-reasoner` 将于
+   2026-07-24 退役，本配置已使用 V4 系列名称，不受影响。
 2. **建议**：Settings → General 把默认分支切到 `main`；
    预创建标签：`feedback` `loop:approved` `needs-human` `duplicate`
    `type:bug` `type:ux` `type:feature` `type:question` `priority:p1` `p2` `p3`。

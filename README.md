@@ -82,7 +82,7 @@ npx serve .
 
 - 用户在应用「更多 → 意见反馈」提交（预填 Issue 或一键复制转交）；
 - Claude 通过 GitHub Actions 自动分诊、在批准后实现并开 PR；人只把守**批准**与**合并**两道闸门；
-- 启用方法：仓库 Secrets 添加 `ANTHROPIC_API_KEY`（详见 loop.md §7）；
+- 启用方法：仓库 Secrets 添加 `ANTHROPIC_API_KEY`（Claude）**或** `DEEPSEEK_API_KEY`（DeepSeek V4 国内通道，经 Anthropic 兼容端点驱动同一管道），详见 loop.md §7；
 - 红线（隐私零遥测、零运行时依赖、数据消毒不放宽等）写死在 loop.md §5，越线自动转人工。
 
 本地跑测试：`npm install && npm test`（77+ 项 jsdom 冒烟，CI 在每个 PR 上强制执行）。
