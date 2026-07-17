@@ -21,6 +21,14 @@
 
 所有输入走**底部浮层、对话式提问**（"什么事让你忘记时间？"），每条记录沉淀到探索页画像/决策方向池。旧版链接（#/assess 等）自动重定向，数据完全兼容。
 
+## 界面预览
+
+| 开场定向 | 此刻 · 下一步推荐 | 兴趣画像 | 深色模式 |
+|---|---|---|---|
+| ![开场定向](docs/screens/01-onboarding.png) | ![此刻](docs/screens/02-now-light.png) | ![兴趣画像](docs/screens/05-result-light.png) | ![深色模式](docs/screens/11-now-dark.png) |
+
+（真机截图由 `node tools/e2e.mjs` 在 Chromium 中自动生成——该脚本同时验证核心旅程、双主题渲染、控制台零错误与无横向溢出。）
+
 ## 技术特性
 
 - **PWA**：Service Worker 离线可用（导航网络优先 + 4 秒弱网超时回退；静态资源 stale-while-revalidate，部署后自动更新）；可"添加到主屏幕"（含 maskable 图标、快捷方式）；防强制门户缓存污染。

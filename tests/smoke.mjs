@@ -173,8 +173,15 @@ click('[data-act="cand-tier"][data-tier="rush"]');
 goto("#/chart/tier");
 check("冲稳保归档生效", () => text().includes("冲 1"));
 check("打印导出按钮存在", () => !!doc.querySelector('[data-act="export-print"]'));
+// 捕获打印页真实内容：stub window.open 提供可写的假文档
+let printedHtml = "";
+const openBackup = window.open;
+window.open = () => ({ document: { open() {}, write(h) { printedHtml += h; }, close() {} } });
 click('[data-act="export-print"]');
-check("打印导出优雅降级（无弹窗环境）", () => text().includes("冲稳保"));
+window.open = openBackup;
+check("打印页包含方案与打印按钮", () =>
+  printedHtml.includes("华中科技大学") && printedHtml.includes("志愿方案表") && printedHtml.includes("window.print"));
+check("打印页含免责脚注", () => printedHtml.includes("阳光志愿"));
 
 /* ---- 位次定位 ---- */
 goto("#/chart");
@@ -252,18 +259,22 @@ check("更多页有反馈入口", () => !!doc.querySelector('[data-act="sheet-op
 click('[data-act="sheet-open"][data-sheet="fb"]');
 check("反馈浮层打开（含隐私说明）", () => modal().includes("意见反馈") && modal().includes("不会上传"));
 doc.querySelector("#fb-text").value = "建议增加深色模式开关";
-let openedUrl = "";
-const realOpen = window.open;
-window.open = (u) => { openedUrl = String(u); return { document: { open() {}, write() {}, close() {} } }; };
+// 反馈改走 issue 模板链接（labels 参数对普通用户无效）：捕获临时锚点的 href
+let fbHref = "";
+const fbCatch = (e) => {
+  const a = e.target && e.target.closest && e.target.closest('a[target="_blank"]');
+  if (a) { fbHref = a.href; e.preventDefault(); }
+};
+doc.addEventListener("click", fbCatch, true);
 click('[data-act="fb-github"]');
-window.open = realOpen;
-check("生成预填 GitHub Issue 链接", () =>
-  openedUrl.includes("/issues/new") && openedUrl.includes("labels=feedback") &&
-  openedUrl.includes(encodeURIComponent("深色模式开关")));
+doc.removeEventListener("click", fbCatch, true);
+check("生成 issue 模板预填链接", () =>
+  fbHref.includes("/issues/new") && fbHref.includes("template=feedback.yml") &&
+  fbHref.includes(encodeURIComponent("深色模式开关")));
 check("提交后浮层关闭", () => modal().trim() === "");
 
 goto("#/more/about");
-check("关于页（v2 + 设计文档）", () => text().includes("2.5.0") && text().includes("design.md"));
+check("关于页（v2 + 设计文档）", () => text().includes("2.6.0") && text().includes("design.md"));
 
 /* ---- 数据消毒（导入恶意 / 损坏备份） ---- */
 const evil = JSON.stringify({ app: "pathfinder", data: {
@@ -293,6 +304,19 @@ check("心流/成就/访谈/方案已保存", () => saved.flows.length === 1 && 
 check("奥德赛标题已保存", () => saved.odyssey.a.title === "工科稳步前行");
 check("位次与往年位次已保存", () => saved.decision.rank.mine === 20000 && saved.decision.candidates.some((c) => c.pastRank === 30000));
 check("选科已保存", () => Array.isArray(saved.subjects) && saved.subjects.length === 3);
+
+/* ---- 重载周期回归（H1：merge 曾吞掉空字典默认值的存档） ---- */
+goto("#/compass/quiz");
+click('[data-act="riasec-retake"]'); // confirm 已 mock 为 true
+for (let i = 0; i < 5; i++) {
+  doc.querySelectorAll('[data-act="riasec-answer"]')[0]
+    .dispatchEvent(new window.MouseEvent("click", { bubbles: true }));
+}
+click('[data-act="riasec-quit"]');
+const reloaded = window.Store.load(); // 模拟下次打开应用的完整载入路径
+check("重载后中途作答存活（H1 回归）", () => Object.keys(reloaded.riasec.answers).length === 5);
+check("重载后清单勾选存活（H1 回归）", () => reloaded.checklist["p1-1"] === true);
+check("重载后测评历史完整", () => reloaded.riasec.history.length === 1 && /^[RIASEC]{3}$/.test(reloaded.riasec.history[0].code));
 
 console.log(results.join("\n"));
 if (errors.length) {

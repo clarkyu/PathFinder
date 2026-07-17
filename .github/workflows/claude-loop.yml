@@ -14,21 +14,26 @@ on:
   issue_comment:
     types: [created]
 
-permissions:
-  contents: write
-  pull-requests: write
-  issues: write
-  id-token: write
-  actions: read
+permissions: {}
 
 jobs:
-  # ── 阶段一：自动分诊（任何 feedback issue 创建时） ───────────────
+  # ── 阶段一：自动分诊 ─────────────────────────────────────────────
+  # 只监听「feedback 标签被贴上」这一个事件：issue 模板创建、应用内模板链接、
+  # 维护者手动补标签，三种来源都会触发且各只触发一次（opened+labeled 不会重复跑）。
   triage:
     if: >
       github.event_name == 'issues' &&
-      github.event.action == 'opened' &&
-      contains(join(github.event.issue.labels.*.name, ','), 'feedback')
+      github.event.action == 'labeled' &&
+      github.event.label.name == 'feedback'
     runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      issues: write
+      id-token: write
+    concurrency:
+      group: loop-triage-${{ github.event.issue.number }}
+      cancel-in-progress: false
     steps:
       - name: Resolve AI provider
         id: ai
@@ -63,7 +68,7 @@ jobs:
         with:
           anthropic_api_key: ${{ steps.ai.outputs.provider == 'deepseek' && secrets.DEEPSEEK_API_KEY || secrets.ANTHROPIC_API_KEY }}
           claude_args: |
-            --allowedTools "Read,Grep,Glob,Bash(gh issue:*),Bash(gh search:*),Bash(gh label:*)"
+            --allowedTools "Read,Grep,Glob,Bash(gh issue view:*),Bash(gh issue comment:*),Bash(gh issue edit:*),Bash(gh search:*),Bash(gh label:*)"
           prompt: |
             你是 PathFinder 仓库循环工程的分诊员。请严格按 docs/loop.md 的「§3 分诊规则」处理
             issue #${{ github.event.issue.number }}（只分诊，不改任何代码）：
@@ -81,6 +86,16 @@ jobs:
       github.event.action == 'labeled' &&
       github.event.label.name == 'loop:approved'
     runs-on: ubuntu-latest
+    timeout-minutes: 40
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+      id-token: write
+      actions: read
+    concurrency:
+      group: loop-implement-${{ github.event.issue.number }}
+      cancel-in-progress: false
     steps:
       - name: Resolve AI provider
         id: ai
@@ -126,7 +141,7 @@ jobs:
         with:
           anthropic_api_key: ${{ steps.ai.outputs.provider == 'deepseek' && secrets.DEEPSEEK_API_KEY || secrets.ANTHROPIC_API_KEY }}
           claude_args: |
-            --allowedTools "Read,Grep,Glob,Edit,Write,Bash(npm:*),Bash(node:*),Bash(git:*),Bash(gh:*)"
+            --allowedTools "Read,Grep,Glob,Edit,Write,Bash(npm:*),Bash(node:*),Bash(git:*),Bash(gh pr create:*),Bash(gh pr view:*),Bash(gh issue view:*),Bash(gh issue comment:*),Bash(gh label:*)"
           prompt: |
             你是 PathFinder 仓库循环工程的实现者。维护者已批准 issue
             #${{ github.event.issue.number }}，请严格按 docs/loop.md「§4 实现守则」执行：
@@ -146,8 +161,19 @@ jobs:
   mention:
     if: >
       github.event_name == 'issue_comment' &&
-      contains(github.event.comment.body, '@claude')
+      contains(github.event.comment.body, '@claude') &&
+      github.event.comment.user.type != 'Bot'
     runs-on: ubuntu-latest
+    timeout-minutes: 40
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+      id-token: write
+      actions: read
+    concurrency:
+      group: loop-mention-${{ github.event.issue.number }}
+      cancel-in-progress: false
     steps:
       - name: Resolve AI provider
         id: ai
@@ -192,4 +218,4 @@ jobs:
         with:
           anthropic_api_key: ${{ steps.ai.outputs.provider == 'deepseek' && secrets.DEEPSEEK_API_KEY || secrets.ANTHROPIC_API_KEY }}
           claude_args: |
-            --allowedTools "Read,Grep,Glob,Edit,Write,Bash(npm:*),Bash(node:*),Bash(git:*),Bash(gh:*)"
+            --allowedTools "Read,Grep,Glob,Edit,Write,Bash(npm:*),Bash(node:*),Bash(git:*),Bash(gh pr:*),Bash(gh issue:*),Bash(gh label:*),Bash(gh search:*)"

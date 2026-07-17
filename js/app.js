@@ -167,7 +167,7 @@
     var dots = dataPts.map(function (p, i) {
       return '<circle cx="' + p[0].toFixed(1) + '" cy="' + p[1].toFixed(1) + '" r="3" fill="' + DATA.riasec.types[order[i]].color + '"/>';
     }).join("");
-    return '<svg class="radar" viewBox="0 0 260 248" role="img" aria-label="霍兰德六型兴趣雷达图">' +
+    return '<svg class="radar" viewBox="0 0 260 248" width="260" height="248" role="img" aria-label="霍兰德六型兴趣雷达图">' +
       grid + axes +
       '<polygon class="rd-data" points="' + dataPoly + '"/>' +
       dots + labels + "</svg>";
@@ -183,13 +183,7 @@
     ctx.arcTo(x, y, x + w, y, r);
     ctx.closePath();
   }
-  function copyText(t) {
-    try {
-      if (navigator.clipboard && navigator.clipboard.writeText) {
-        navigator.clipboard.writeText(t);
-        return true;
-      }
-    } catch (e) { /* 走兜底 */ }
+  function copyTextLegacy(t) {
     try {
       var ta = document.createElement("textarea");
       ta.value = t;
@@ -199,6 +193,20 @@
       ta.remove();
       return !!ok;
     } catch (e) { return false; }
+  }
+  // 以真实结果回调：clipboard API 可能异步失败（失焦/权限），不能同步谎报成功
+  function copyText(t, done) {
+    var finish = done || function () {};
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(t).then(
+          function () { finish(true); },
+          function () { finish(copyTextLegacy(t)); }
+        );
+        return;
+      }
+    } catch (e) { /* 走兜底 */ }
+    finish(copyTextLegacy(t));
   }
   function downloadBlob(blob, name) {
     try {
@@ -367,7 +375,8 @@
       "h1{font-size:22px;margin:0}h2{font-size:15px;margin:20px 0 8px}" +
       "h2 span{color:#fff;border-radius:4px;padding:2px 9px;margin-right:8px;font-size:13px}" +
       "table{width:100%;border-collapse:collapse;font-size:12.5px}" +
-      "th,td{border:1px solid #C9D2DC;padding:6px 8px;text-align:left;vertical-align:top}th{background:#F0F3F7}" +
+      "th,td{border:1px solid #C9D2DC;padding:6px 8px;text-align:left;vertical-align:top}" +
+      "td{white-space:pre-wrap}th{background:#F0F3F7}" +
       ".meta{color:#667789;font-size:12.5px;margin:6px 0 14px}" +
       ".foot{margin-top:24px;color:#667789;font-size:11.5px;border-top:1px solid #C9D2DC;padding-top:10px;line-height:1.7}" +
       ".noprint{margin:14px 0}.noprint button{padding:9px 20px;font-size:14px;cursor:pointer}" +
@@ -517,7 +526,7 @@
     },
     fb: function () {
       return sheetWrap("意见反馈",
-        "你的反馈会进入迭代循环：分诊 → 修复 → 上线后回访。只提交下面可见的内容，不会上传你的任何本地数据。",
+        "你的反馈会进入迭代循环：分诊 → 修复 → 上线后回访。提交内容 = 下面填写的文字 + 应用版本与浏览器环境（便于排查），不会上传你的任何测评与记录数据。",
         '<select class="input" id="fb-cat"><option>问题报告</option><option>功能建议</option><option>使用疑问</option></select>' +
         '<textarea class="input" id="fb-text" rows="4" maxlength="1000" placeholder="发生了什么？你期望是什么样？"></textarea>' +
         '<button class="btn btn-cta btn-block" data-act="fb-github">提交到 GitHub（推荐）</button>' +
@@ -1003,7 +1012,9 @@
       "</div>" +
       (rk.mine && rk.total && rk.total >= rk.mine
         ? '<p class="note">你大约位于全省前 ' + (rk.mine / rk.total * 100).toFixed(1) + "%。</p>"
-        : '<p class="note">位次查本省考试院的「一分一段表」。</p>'));
+        : rk.mine && rk.total && rk.total < rk.mine
+          ? '<p class="note">考生总数应不小于你的位次，请检查两个数字。</p>'
+          : '<p class="note">位次查本省考试院的「一分一段表」。</p>'));
 
     var targets = S.decision.candidates.filter(function (c) { return c.pastRank > 0; });
     if (!rk.mine) {
@@ -1393,22 +1404,31 @@
       var fbTxt = $("#fb-text").value.trim();
       if (!fbTxt) { toast("先写两句反馈吧"); return; }
       var fbCat = $("#fb-cat").value;
-      var fbBody = "【类型】" + fbCat +
-        "\n【描述】\n" + fbTxt +
-        "\n\n【版本】v" + DATA.app.version +
-        "\n【环境】" + String(navigator.userAgent || "").slice(0, 90) +
-        "\n\n—— 来自应用内反馈";
+      var fbEnv = "v" + DATA.app.version + " · " + String(navigator.userAgent || "").slice(0, 60);
       if (act === "fb-github") {
-        var fbUrl = DATA.app.repo + "/issues/new?labels=feedback&title=" +
-          encodeURIComponent("【" + fbCat + "】" + fbTxt.slice(0, 30)) +
-          "&body=" + encodeURIComponent(fbBody);
-        var fw = null;
-        try { fw = window.open(fbUrl, "_blank"); } catch (e) { fw = null; }
-        if (!fw) { copyText(fbBody); toast("无法打开新窗口，反馈内容已复制"); return; }
+        // 走 issue 模板：模板自带 feedback 标签对任何账号生效
+        //（URL 的 labels 参数只对有仓库权限的用户生效，普通用户会静默丢标签）
+        var fbUrl = DATA.app.repo + "/issues/new?template=feedback.yml" +
+          "&title=" + encodeURIComponent("【" + fbCat + "】" + fbTxt.slice(0, 30)) +
+          "&type=" + encodeURIComponent(fbCat) +
+          "&desc=" + encodeURIComponent(fbTxt) +
+          "&env=" + encodeURIComponent(fbEnv);
+        var fa = document.createElement("a");
+        fa.href = fbUrl;
+        fa.target = "_blank";
+        fa.rel = "noopener";
+        document.body.appendChild(fa);
+        fa.click();
+        fa.remove();
         closeSheet();
+        toast("已打开 GitHub，提交后即进入迭代循环");
       } else {
-        if (copyText(fbBody)) { toast("已复制，去粘贴给维护者吧"); closeSheet(); }
-        else toast("复制失败，请手动选择文字复制");
+        var fbBody = "【类型】" + fbCat + "\n【描述】\n" + fbTxt +
+          "\n\n【环境】" + fbEnv + "\n\n—— 来自应用内反馈";
+        copyText(fbBody, function (ok) {
+          if (ok) { toast("已复制，去粘贴给维护者吧"); closeSheet(); }
+          else toast("复制失败，请长按选择文字手动复制");
+        });
       }
       return;
     }
@@ -1430,7 +1450,12 @@
       toast("当前环境不支持直接分享，已改为下载文件");
       return;
     }
-    if (act === "reload-app") { location.reload(); return; }
+    if (act === "reload-app") { saveNow(); location.reload(); return; }
+    if (act === "update-dismiss") {
+      var ub = $("#update-bar");
+      if (ub) ub.remove();
+      return;
+    }
 
     /* ---- 浮层 ---- */
     if (act === "sheet-open") { openSheet(btn.dataset.sheet, btn); return; }
@@ -1747,8 +1772,15 @@
     bar.className = "update-bar";
     bar.setAttribute("role", "status");
     bar.innerHTML = "<span>应用已更新到新版本</span>" +
-      '<button class="btn btn-sm" data-act="reload-app">立即刷新</button>';
+      '<button class="btn btn-sm" data-act="reload-app">立即刷新</button>' +
+      '<button class="ub-x" data-act="update-dismiss" aria-label="暂不刷新">' + ICONS.close + "</button>";
     document.body.appendChild(bar);
+  });
+
+  /* ---------------- 离开页面前冲刷防抖中的保存 ---------------- */
+  window.addEventListener("pagehide", saveNow);
+  document.addEventListener("visibilitychange", function () {
+    if (document.visibilityState === "hidden") saveNow();
   });
 
   /* ---------------- 多标签页同步 ---------------- */

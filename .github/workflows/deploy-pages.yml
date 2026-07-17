@@ -12,10 +12,23 @@ permissions:
 
 concurrency:
   group: pages
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
+  # 部署门禁：测试红了绝不上线（循环工程 AI 产出的合并尤其需要这道闸）
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm test
+
   deploy:
+    needs: test
     runs-on: ubuntu-latest
     environment:
       name: github-pages

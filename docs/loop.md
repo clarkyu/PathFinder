@@ -95,9 +95,13 @@ PR（评审）→ `main` 部署（发布）→ Issue 回帖（回访）→ desig
    `::notice::循环引擎：…` 标明实际引擎。
    注：DeepSeek 旧模型名 `deepseek-chat` / `deepseek-reasoner` 将于
    2026-07-24 退役，本配置已使用 V4 系列名称，不受影响。
-2. **建议**：Settings → General 把默认分支切到 `main`；
-   预创建标签：`feedback` `loop:approved` `needs-human` `duplicate`
-   `type:bug` `type:ux` `type:feature` `type:question` `priority:p1` `p2` `p3`。
+2. **建议**：Settings → General 把默认分支切到 `main`，并为 `main` 开启
+   分支保护（禁止直推）——这是「人工合并」闸门的硬保障，红线不能只靠提示词守。
+   标签无需预建：分诊工作流有 `gh label` 权限，首次运行会自行创建。
+3. **触发方式**：分诊只监听「`feedback` 标签被贴上」这一事件——issue 模板
+   创建（含应用内链接）会自动带标签；手动开的 issue 由维护者补贴标签即触发。
+   注意：GitHub 的 `/issues/new?labels=…` URL 参数只对有仓库权限的用户生效，
+   因此应用内链接走 `?template=feedback.yml`（模板标签对任何人生效）。
 3. **对话**：任何 Issue/PR 评论里 `@claude ...` 可直接指挥（提问、改方案、修 PR）。
 4. **故障模式**：API key 失效 → 工作流警告并跳过，Issue 滞留在 `feedback`
    状态等人工；CI 红 → PR 不可合并；实现者两次尝试仍红 → 自动转 `needs-human`。

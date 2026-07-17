@@ -417,7 +417,12 @@ select.input {
 .code-row { display: flex; justify-content: center; gap: 6px; margin: 6px 0 8px; }
 .code-letter { font-size: 44px; font-weight: 800; letter-spacing: 2px; }
 .cmp-hero .code-row { margin-top: 2px; }
-.radar { display: block; width: min(320px, 86%); margin: 10px auto 4px; animation: fadeIn 0.5s ease; }
+.radar {
+  display: block; width: min(320px, 86%); height: auto;
+  aspect-ratio: 260 / 248;               /* viewBox 比例：无宽高属性时兜底 */
+  margin: 10px auto 4px; animation: fadeIn 0.5s ease;
+}
+.radar text { paint-order: stroke; stroke: var(--card); stroke-width: 3px; } /* 文字加底色描边提升可读性 */
 .cmp-hero .radar { width: min(260px, 78%); }
 .radar .rd-grid { fill: none; stroke: var(--dot); stroke-width: 1; }
 .radar .rd-axis { stroke: var(--line); stroke-width: 1; }
@@ -628,6 +633,11 @@ select.input {
   max-width: 92vw;
 }
 .update-bar .btn { background: #fff; color: var(--navy); padding: 7px 14px; border-radius: 99px; }
+.update-bar .ub-x {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 28px; height: 28px; border-radius: 50%; color: rgba(255, 255, 255, 0.75);
+}
+.update-bar .ub-x svg { width: 13px; height: 13px; }
 
 /* ---------------- Toast ---------------- */
 .toast {

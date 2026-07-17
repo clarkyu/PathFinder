@@ -11,6 +11,11 @@
   "theme_color": "#1450A3",
   "background_color": "#F4F7FB",
   "categories": ["education", "lifestyle", "productivity"],
+  "screenshots": [
+    { "src": "docs/screens/02-now-light.png", "sizes": "780x1688", "type": "image/png", "form_factor": "narrow", "label": "此刻：下一步推荐与阶段时间线" },
+    { "src": "docs/screens/05-result-light.png", "sizes": "780x1688", "type": "image/png", "form_factor": "narrow", "label": "霍兰德兴趣画像与雷达图" },
+    { "src": "docs/screens/11-now-dark.png", "sizes": "780x1688", "type": "image/png", "form_factor": "narrow", "label": "深色模式" }
+  ],
   "icons": [
     { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
     { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },

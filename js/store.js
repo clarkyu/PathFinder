@@ -88,6 +88,7 @@ var Store = (function () {
     var answers = {};
     if (r.answers && typeof r.answers === "object") {
       Object.keys(r.answers).forEach(function (k) {
+        if (!/^\d+$/.test(k)) return; // 键必须是纯数字下标，防 "1e0"/" 3 " 折叠覆盖
         var i = Number(k), v = Number(r.answers[k]);
         if (i >= 0 && i < QUESTION_COUNT && (v === 0 || v === 1 || v === 2)) answers[i] = v;
       });
@@ -112,7 +113,8 @@ var Store = (function () {
         id: safeId(f.id),
         activity: str(f.activity, 40),
         when: str(f.when, 30),
-        signals: arr(f.signals).map(Number).filter(function (i) { return i >= 0 && i < 5; }),
+        signals: arr(f.signals).map(Number)
+          .filter(function (i, idx, a) { return Number.isInteger(i) && i >= 0 && i < 5 && a.indexOf(i) === idx; }),
         note: str(f.note, 500),
         created: num(f.created, 0, 4102444800000, Date.now())
       };
@@ -151,6 +153,7 @@ var Store = (function () {
       var answers = {};
       if (iv.answers && typeof iv.answers === "object") {
         Object.keys(iv.answers).forEach(function (k) {
+          if (!/^\d+$/.test(k)) return;
           var i = Number(k);
           if (i >= 0 && i < 4) answers[i] = str(iv.answers[k], 2000);
         });
@@ -217,7 +220,10 @@ var Store = (function () {
       if (Array.isArray(b)) {
         if (Array.isArray(sv)) base[k] = sv;
       } else if (typeof b === "object" && b !== null) {
-        base[k] = merge(b, sv);
+        // 默认值为空字典的字段（checklist / riasec.answers 等）：整体采纳存档，
+        // 否则用户数据会在每次载入时被空默认值吞掉；合法性交由 sanitize 把关。
+        if (Object.keys(b).length === 0 && typeof sv === "object" && !Array.isArray(sv)) base[k] = sv;
+        else base[k] = merge(b, sv);
       } else {
         base[k] = sv;
       }

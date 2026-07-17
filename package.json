@@ -1,6 +1,6 @@
 {
   "name": "pathfinder-app",
-  "version": "2.5.0",
+  "version": "2.6.0",
   "private": true,
   "description": "航向 PathFinder · 高中毕业生升学与人生航向规划系统（零依赖纯静态 PWA；本包仅承载测试与工具脚本）",
   "scripts": {
@@ -9,6 +9,7 @@
     "serve": "python3 -m http.server 8080"
   },
   "devDependencies": {
-    "jsdom": "^29.1.1"
+    "jsdom": "^29.1.1",
+    "playwright": "^1.61.1"
   }
 }
