@@ -1,0 +1,44 @@
+name: 用户反馈
+description: 问题报告 / 功能建议 / 使用疑问（应用内"意见反馈"也会生成同样格式）
+title: "【反馈】"
+labels: ["feedback"]
+body:
+  - type: dropdown
+    id: type
+    attributes:
+      label: 类型
+      options:
+        - 问题报告
+        - 功能建议
+        - 使用疑问
+    validations:
+      required: true
+  - type: dropdown
+    id: page
+    attributes:
+      label: 发生在哪个页面
+      options:
+        - 此刻
+        - 探索（测评 / 心流 / 奥德赛 / 访谈）
+        - 决策（方向池 / 冲稳保 / 位次定位）
+        - 更多（家长专区 / 知识库 / 选科 / 数据）
+        - 不确定 / 整体
+    validations:
+      required: true
+  - type: textarea
+    id: desc
+    attributes:
+      label: 发生了什么？你期望是什么样？
+      description: 如果是问题，请尽量写出复现步骤。
+    validations:
+      required: true
+  - type: input
+    id: env
+    attributes:
+      label: 版本与设备（选填）
+      placeholder: 例如 v2.5.0 · iPhone Safari / 小米 Chrome
+  - type: markdown
+    attributes:
+      value: |
+        感谢反馈！它将进入自动迭代循环：分诊 → 维护者批准 → 实现与测试 → 上线后在本条下回访。
+        流程详见仓库 docs/loop.md。

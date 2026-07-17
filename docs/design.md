@@ -148,6 +148,21 @@ v2.0 把隐喻当成了路标，这是个错误——隐喻应该做氛围，不
   回退下载），家长⇄考生两台手机经微信/AirDrop 即可互传全部数据。
   取舍：不做扫码互传——完整备份体积超出二维码容量，诚实地走文件通道。
 
+### v2.5 · 循环工程：系统自己会迭代
+
+- **应用内反馈通道**（更多 → 意见反馈）：结构化生成反馈文本，预填 GitHub
+  Issue 或一键复制转交；只含用户可见内容，零遥测承诺不破。
+- **测试收编进仓库**：tests/smoke.mjs + package.json（jsdom 仅 devDep），
+  CI 在每个 PR 上跑冒烟 + 语法 + 版本一致性检查。
+- **自迭代管道**（.github/workflows/claude-loop.yml）：feedback Issue →
+  Claude 自动分诊 → 维护者加 loop:approved → Claude 在 loop/issue-N 分支
+  实现并补测试 → 开 PR → 人工合并 → 部署后回访。两道人工闸门 + 六条红线
+  写入 docs/loop.md，作为对自动化系统的"宪法约束"。
+- **引擎双通道**：管道可运行在 Claude（ANTHROPIC_API_KEY）或 DeepSeek V4
+  （DEEPSEEK_API_KEY，经官方 Anthropic 兼容端点）上——国内维护者用易得的
+  DeepSeek key 即可启用全套循环；模型按任务分级（分诊 flash / 实现 pro）。
+- 本版本自身即按新流程交付：走分支 + PR，不直推 main。
+
 ## 7. 明确的取舍
 
 - **不做**账号/云同步：数据本地是隐私承诺，也是 PWA 的长处。
