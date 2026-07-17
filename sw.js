@@ -6,7 +6,7 @@
  *   后台拉取新版本写入缓存，下次访问生效（部署后无需手动清缓存）。 */
 "use strict";
 
-var CACHE = "pathfinder-v2.5.0";
+var CACHE = "pathfinder-v2.6.0";
 var NAV_TIMEOUT_MS = 4000;
 var ASSETS = [
   "./",
@@ -47,6 +47,14 @@ function isTrustworthyShell(res) {
   return res && res.ok && !res.redirected && res.type === "basic" &&
     (res.headers.get("content-type") || "").indexOf("text/html") >= 0;
 }
+// 且必须是应用根路径本身——否则访问 /404.html 等同源页面会把壳换成跳转桩，
+// 离线时陷入重定向死循环
+var SCOPE_PATH = new URL("./", self.location).pathname;
+function isShellUrl(url) {
+  return url.pathname === SCOPE_PATH || url.pathname === SCOPE_PATH + "index.html";
+}
+// 运行时缓存只服务站点资源；仓库附带目录不占用户缓存空间
+var NO_RUNTIME_CACHE = /\/(docs|tests|tools|node_modules)\//;
 
 self.addEventListener("fetch", function (e) {
   var req = e.request;
@@ -57,9 +65,9 @@ self.addEventListener("fetch", function (e) {
   // 页面导航：网络优先 + 超时竞速（弱网时别让用户干等，缓存壳就在手边）
   if (req.mode === "navigate") {
     var networkNav = fetch(req).then(function (res) {
-      if (isTrustworthyShell(res)) {
+      if (isTrustworthyShell(res) && isShellUrl(url)) {
         var copy = res.clone();
-        caches.open(CACHE).then(function (c) { c.put("./index.html", copy); });
+        e.waitUntil(caches.open(CACHE).then(function (c) { return c.put("./index.html", copy); }));
       }
       return res;
     });
@@ -78,6 +86,7 @@ self.addEventListener("fetch", function (e) {
   }
 
   // 静态资源：stale-while-revalidate
+  if (NO_RUNTIME_CACHE.test(url.pathname)) return; // 附带目录直接走网络，不占缓存
   e.respondWith(
     caches.open(CACHE).then(function (c) {
       return c.match(req).then(function (hit) {

@@ -9,6 +9,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   smoke:
     runs-on: ubuntu-latest
@@ -34,9 +38,11 @@ jobs:
           node --check sw.js
           node -e "JSON.parse(require('fs').readFileSync('manifest.webmanifest','utf8'))"
 
-      - name: Version consistency (data.js ⇄ sw.js)
+      - name: Version consistency (data.js ⇄ sw.js ⇄ package.json)
         run: |
-          APP_V=$(grep -o 'version: "[0-9.]*"' js/data.js | grep -o '[0-9.]*')
-          SW_V=$(grep -o 'pathfinder-v[0-9.]*' sw.js | grep -o '[0-9.]*')
-          echo "app=$APP_V sw=$SW_V"
-          test "$APP_V" = "$SW_V" || { echo "::error::js/data.js version 与 sw.js CACHE 版本不一致"; exit 1; }
+          APP_V=$(grep -m1 -o 'version: "[0-9.]*"' js/data.js | grep -o '[0-9.]*')
+          SW_V=$(grep -m1 -o 'pathfinder-v[0-9.]*' sw.js | grep -o '[0-9.]*')
+          PKG_V=$(node -p "require('./package.json').version")
+          echo "app=$APP_V sw=$SW_V pkg=$PKG_V"
+          test "$APP_V" = "$SW_V" || { echo "::error::js/data.js 与 sw.js 版本不一致"; exit 1; }
+          test "$APP_V" = "$PKG_V" || { echo "::error::js/data.js 与 package.json 版本不一致"; exit 1; }
